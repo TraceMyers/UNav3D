@@ -18,29 +18,10 @@ struct Polygon {
 };
 
 /*
- * A Vertex is a point with edges
- */
-struct Vertex {
-	Vertex(const FVector& _Point) :
-		Point(_Point)
-	{}
-	const FVector& Point;
-	TArray<FVector> Edges;
-};
-
-/*
  * Mesh consisting of vertices and edges as pulled from the GPU 
- * Useful when only the vertices are needed, since reconstructing tris from the vertices takes time.
- */
-struct VertexMesh {
-	TArray<Vertex> Vertices;	
-};
-
-/*
- * Mesh consisting of vertices and edges as pulled from the GPU 
- * Slower to build than VertexMesh
  */
 struct TriMesh {
-	TArray<FVector> Points;
+	int VertexCt;
+	FVector* Vertices;
 	TArray<Tri> Tris;
 };
