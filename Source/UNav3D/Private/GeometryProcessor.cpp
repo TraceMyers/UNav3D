@@ -1,12 +1,15 @@
 ﻿#include "GeometryProcessor.h"
 #include "Geometry.h"
-
+#include "Rendering/PositionVertexBuffer.h"
+#include "RenderingThread.h"
+// #include "RendererInterface.h"
+// #include "Runtime/RenderCore/Public/RenderingThread.h"
 GeometryProcessor::GeometryProcessor() {}
 
 GeometryProcessor::~GeometryProcessor() {}
 
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::CreateTriMesh(
-	TriMesh& TMesh,
+	Geometry::TriMesh& TMesh,
 	UStaticMesh* StaticMesh,
 	const FTransform* TForm
 ) const {
@@ -25,7 +28,7 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::CreateTriMesh(
 	FVector* Vertices = GetVertices(LOD, VertexCt);
 
 	if (TForm != nullptr) {
-		for (int i = 0; i < VertexCt; i++) {
+		for (uint32 i = 0; i < VertexCt; i++) {
 			Vertices[i] = TForm->TransformPosition(Vertices[i]);
 		}
 	}
@@ -57,7 +60,7 @@ uint16* GeometryProcessor::GetIndices(const FStaticMeshLODResources& LOD, uint32
 			RHIUnlockIndexBuffer(IndBuf->IndexBufferRHI);
 		}
 	);
-	FlushRenderingCommands();
+	FlushRenderingCommands(); 
 	
 	return TriIndices;
 }
@@ -86,14 +89,14 @@ FVector* GeometryProcessor::GetVertices(const FStaticMeshLODResources& LOD, uint
 }
 
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(
-	TriMesh& TMesh,
+	Geometry::TriMesh& TMesh,
 	uint16* Indices,
 	FVector* Vertices,
 	uint32 IndexCt,
 	uint32 VertexCt
 ) {
 	uint16 IndexMax = 0;
-	for (int i = 0; i < IndexCt; i++) {
+	for (uint32 i = 0; i < IndexCt; i++) {
 		const uint16& Index = Indices[i];
 		if (Index > IndexMax) {
 			IndexMax = Index;
@@ -123,7 +126,7 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(
 		const FVector& A = Vertices[AIndex];
 		const FVector& B = Vertices[BIndex];
 		const FVector& C = Vertices[CIndex];
-		Tri T(A, B, C);
+		Geometry::Tri T(A, B, C);
 		TMesh.Tris.Add(T);
 	}
 	TMesh.Vertices = Vertices;

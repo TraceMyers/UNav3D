@@ -77,7 +77,15 @@ void FUNav3DModule::PluginButtonClicked(){
 	constexpr int TotalCalls = 1;
 	FScopedSlowTask ProgressTask(TotalCalls, FText::FromString("Generating UNav3D Data"));
 	ProgressTask.MakeDialog(true);
-	
+
+	AUNav3DBoundsVolume* BoundsVolume = Cast<AUNav3DBoundsVolume>(FoundActors[0]);
+	TArray<AActor*> StaticMeshes = BoundsVolume->GetOverlappingStaticMeshes();
+	if (StaticMeshes.Num() == 0) {
+		UNAV_GENERR("No static mesh actors found inside the bounds volume.")
+	}
+	for (int i = 0; i < StaticMeshes.Num(); i++) {
+		printf("found mesh: %s", TCHAR_TO_ANSI(*StaticMeshes[i]->GetName()));
+	}
 	// if (!NavGenerator.IsValid()) {
 		// NavGenerator = MakeUnique<FNavGenerator>();
 		// if (NavGenerator.IsValid()) {

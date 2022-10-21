@@ -26,7 +26,6 @@ public class UNav3D : ModuleRules
 			new string[]
 			{
 				"Core",
-				// ... add other public dependencies that you statically link with here ...
 			}
 			);
 			
@@ -41,8 +40,10 @@ public class UNav3D : ModuleRules
 				"CoreUObject",
 				"Engine",
 				"Slate",
-				"SlateCore"
-				// ... add private dependencies that you statically link with here ...	
+				"SlateCore",
+				"RenderCore",
+				"RHI"
+				// "ShaderConductor"
 			}
 			);
 		

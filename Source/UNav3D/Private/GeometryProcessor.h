@@ -3,9 +3,12 @@
 #define UNAV_GEO_DBG
 
 class UStaticMesh;
-struct TriMesh;
+namespace Geometry {
+	struct TriMesh;	
+}
 
 class GeometryProcessor {
+
 	
 public:
 
@@ -20,14 +23,14 @@ public:
 	
 	// Pulls Static Mesh data and populates TMesh with it.
 	// If TForm != nullptr, it will be used to transform the vertices
-	GEOPROC_RESPONSE CreateTriMesh(TriMesh& TMesh, UStaticMesh* StaticMesh, const FTransform* TForm=nullptr) const;
+	GEOPROC_RESPONSE CreateTriMesh(Geometry::TriMesh& TMesh, UStaticMesh* StaticMesh, const FTransform* TForm=nullptr) const;
 
 private:
 
 	uint16* GetIndices(const FStaticMeshLODResources& LOD, uint32& IndexCt) const;
 	FVector* GetVertices(const FStaticMeshLODResources& LOD, uint32& VertexCt) const;
 	static GEOPROC_RESPONSE PopulateTriMesh(
-		TriMesh& TMesh,
+		Geometry::TriMesh& TMesh,
 		uint16* Indices,
 		FVector* Vertices,
 		uint32 IndexCt,
