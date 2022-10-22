@@ -1,8 +1,11 @@
 ﻿#pragma once
 
+class AStaticMeshActor;
+class UBoxComponent;
+
 namespace Geometry {
 
-	// Triangle; saves space by storing references to vertices
+	// Triangle; saves space by storing references to vertices on the TriMesh
 	struct Tri {
 		Tri(const FVector& _A, const FVector& _B, const FVector& _C) :
 			A(_A), B(_B), C(_C), Edges{nullptr}
@@ -13,17 +16,39 @@ namespace Geometry {
 		Tri* Edges[3]; // adjacent tris touching AB, BC, and CA in that order
 	};
 
-	// edges are between adjacent vertices and Num() - 1 connects to 0
-	struct Polygon {
-		TArray<FVector> Points;
+	// for storing world bounding box vertices of UBoxComponents and AStaticMeshActors' Meshes
+	struct BoundingBox {
+		static constexpr int RECT_PRISM_PTS = 8;
+		FVector Vertices[RECT_PRISM_PTS];
+		// precomputed data using Vertices
+		FVector OverlapCheckVectors[3];
+		float OverlapCheckSqMags[3];
 	};
-
-	// mesh consisting of vertices and edges as pulled from the GPU 
+	
+	// Mesh made of Tris, vertices populated from GPU vertex buffer. currently static but with the MeshActor
+	// reference, movement could be supported in the future; BoundingBox is used for initial tests - if two BB's overlap,
+	// the TriMeshes *might* overlap.
 	struct TriMesh {
+		AStaticMeshActor* MeshActor;
+		BoundingBox Box;
 		int VertexCt;
 		TUniquePtr<FVector[]> Vertices;
 		TArray<Tri> Tris;
 	};
 
-	static FVector& GetZMinimum(const TriMesh& TMesh);
+	// edges are between adjacent vertices and Num() - 1 connects to 0
+	struct Polygon {
+		TArray<FVector> Points;
+	};
+
+	// Sets a BoundingBox from a AStaticMeshActor
+	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor, bool DoTransform=true);
+
+	// Sets a BoundingBox from a UBoxComponent
+	void SetBoundingBox(BoundingBox& BBox, const UBoxComponent* BoxCmp, bool DoTransform=true);
+
+	// Checks whether or not the two bounding boxes overlap. Doing our own overlap checking in editor appears to be
+	// necessary, as UBoxComponents will not report overlaps with AStaticMeshActor until play starts
+	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB);
+	
 }

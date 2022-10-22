@@ -7,9 +7,10 @@
 #include "Kismet/GameplayStatics.h"
 #include "Misc/ScopedSlowTask.h"
 #include "DebugSwitches.h"
+#include "Engine/StaticMeshActor.h"
+#include "UNav3DBoundsVolume.h"
 
 // using the default windows package define; would be better to determine this
-// have to do this or errors
 #define _WIN32_WINNT_WIN10_TH2 0
 #define _WIN32_WINNT_WIN10_RS1 0
 #define _WIN32_WINNT_WIN10_RS2 0
@@ -19,12 +20,9 @@
 #include <windows.h>
 #include <stdio.h>
 
-#include "Engine/StaticMeshActor.h"
-
+#define LOCTEXT_NAMESPACE "UNav3D"
 
 static const FName UNav3DTabName("UNav3D");
-
-#define LOCTEXT_NAMESPACE "FUNav3DModule"
 
 void FUNav3DModule::StartupModule() {
 	FUNav3DStyle::Initialize();
@@ -61,28 +59,16 @@ void FUNav3DModule::PluginButtonClicked(){
 		UNAV_GENERR("GEditor or World Unavailable")
 		return;
 	}
-	
-	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsOfClass(
-		GEditor->GetEditorWorldContext().World(),
-		AUNav3DBoundsVolume::StaticClass(),
-		FoundActors
-	);
-	const int BoundsVolumeCt = FoundActors.Num();
-	if (BoundsVolumeCt == 0) {
-		UNAV_GENERR("No bounds volumes found.")
+
+	if (!SetBoundsVolume()) {
 		return;
 	}
-	if (BoundsVolumeCt > 1) {
-		UNAV_GENERR("UNav3D Currently only supports one Navigation Volume.")
-		return;
-	}
-	
+
+	// starting up progress bar
 	constexpr int TotalCalls = 1;
 	FScopedSlowTask ProgressTask(TotalCalls, FText::FromString("Generating UNav3D Data"));
 	ProgressTask.MakeDialog(true);
 
-	AUNav3DBoundsVolume* BoundsVolume = Cast<AUNav3DBoundsVolume>(FoundActors[0]);
 	TArray<AStaticMeshActor*>& StaticMeshes = BoundsVolume->GetOverlappingStaticMeshActors();
 	if (StaticMeshes.Num() == 0) {
 		UNAV_GENERR("No static mesh actors found inside the bounds volume.")
@@ -124,6 +110,26 @@ void FUNav3DModule::RegisterMenus() {
 	}
 }
 
+bool FUNav3DModule::SetBoundsVolume() {
+	TArray<AActor*> FoundActors;
+	UGameplayStatics::GetAllActorsOfClass(
+		GEditor->GetEditorWorldContext().World(),
+		AUNav3DBoundsVolume::StaticClass(),
+		FoundActors
+	);
+	const int BoundsVolumeCt = FoundActors.Num();
+	if (BoundsVolumeCt == 0) {
+		UNAV_GENERR("No bounds volumes found.")
+		return false;
+	}
+	if (BoundsVolumeCt > 1) {
+		UNAV_GENERR("UNav3D Currently only supports one Navigation Volume.")
+		return false;
+	}
+	BoundsVolume = Cast<AUNav3DBoundsVolume>(FoundActors[0]);
+	return true;
+}
+
 #undef LOCTEXT_NAMESPACE
-	
+
 IMPLEMENT_MODULE(FUNav3DModule, UNav3D)
