@@ -6,6 +6,7 @@
 #include "UNav3DBoundsVolume.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/ScopedSlowTask.h"
+#include "DebugSwitches.h"
 
 // using the default windows package define; would be better to determine this
 // have to do this or errors
@@ -17,6 +18,8 @@
 #define _WIN32_WINNT_WIN10_RS5 0
 #include <windows.h>
 #include <stdio.h>
+
+#include "Engine/StaticMeshActor.h"
 
 
 static const FName UNav3DTabName("UNav3D");
@@ -54,11 +57,12 @@ void FUNav3DModule::ShutdownModule() {
 
 void FUNav3DModule::PluginButtonClicked(){
 	
-	TArray<AActor*> FoundActors;
 	if (GEditor == nullptr || GEditor->GetEditorWorldContext().World() == nullptr) {
 		UNAV_GENERR("GEditor or World Unavailable")
 		return;
 	}
+	
+	TArray<AActor*> FoundActors;
 	UGameplayStatics::GetAllActorsOfClass(
 		GEditor->GetEditorWorldContext().World(),
 		AUNav3DBoundsVolume::StaticClass(),
@@ -79,24 +83,14 @@ void FUNav3DModule::PluginButtonClicked(){
 	ProgressTask.MakeDialog(true);
 
 	AUNav3DBoundsVolume* BoundsVolume = Cast<AUNav3DBoundsVolume>(FoundActors[0]);
-	TArray<AActor*> StaticMeshes = BoundsVolume->GetOverlappingStaticMeshes();
+	TArray<AStaticMeshActor*>& StaticMeshes = BoundsVolume->GetOverlappingStaticMeshActors();
 	if (StaticMeshes.Num() == 0) {
 		UNAV_GENERR("No static mesh actors found inside the bounds volume.")
 	}
 	for (int i = 0; i < StaticMeshes.Num(); i++) {
-		printf("found mesh: %s", TCHAR_TO_ANSI(*StaticMeshes[i]->GetName()));
+		printf("found mesh: %s\n", TCHAR_TO_ANSI(*StaticMeshes[i]->GetName()));
 	}
-	// if (!NavGenerator.IsValid()) {
-		// NavGenerator = MakeUnique<FNavGenerator>();
-		// if (NavGenerator.IsValid()) {
-			// NavGenerator.Get()->StartThread();
-			// ProgressTask.EnterProgressFrame();
-			// return;
-		// }
-		// UNAV_GENERR("Could not start grid generator.")
-		
-	// }
-	// UNAV_GENERR("Already running.")
+	ProgressTask.EnterProgressFrame();
 }
 
 void FUNav3DModule::RegisterMenus() {

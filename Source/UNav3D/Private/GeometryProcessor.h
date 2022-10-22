@@ -1,6 +1,5 @@
 ﻿#pragma once
 
-#define UNAV_GEO_DBG
 
 class UStaticMesh;
 namespace Geometry {

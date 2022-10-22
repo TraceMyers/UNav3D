@@ -2,8 +2,8 @@
 #include "Geometry.h"
 #include "Rendering/PositionVertexBuffer.h"
 #include "RenderingThread.h"
-// #include "RendererInterface.h"
-// #include "Runtime/RenderCore/Public/RenderingThread.h"
+#include "DebugSwitches.h"
+
 GeometryProcessor::GeometryProcessor() {}
 
 GeometryProcessor::~GeometryProcessor() {}

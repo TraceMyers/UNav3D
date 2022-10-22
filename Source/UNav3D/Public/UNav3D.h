@@ -4,7 +4,6 @@
 #include "Modules/ModuleManager.h"
 
 #define LOCTEXT_NAMESPACE "UNAV3D"
-#define UNAV_DBG
 #define UNAV_GENMSG(x) \
 	FMessageDialog::Open( \
 		EAppMsgType::Ok, FText::Format(LOCTEXT("UNAV3D", "UNAV3D Message: {0}", FText::FromString(x)) \
