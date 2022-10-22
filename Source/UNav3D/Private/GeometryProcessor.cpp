@@ -3,17 +3,15 @@
 #include "Rendering/PositionVertexBuffer.h"
 #include "RenderingThread.h"
 #include "DebugSwitches.h"
+#include "Engine/StaticMeshActor.h"
 
 GeometryProcessor::GeometryProcessor() {}
 
 GeometryProcessor::~GeometryProcessor() {}
 
-GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::CreateTriMesh(
-	Geometry::TriMesh& TMesh,
-	UStaticMesh* StaticMesh,
-	const FTransform* TForm
-) const {
+GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(Geometry::TriMesh& TMesh, bool DoTransform) const {
 	// forcing CPU access to the mesh seems like the most user-friendly option
+	UStaticMesh* StaticMesh = TMesh.MeshActor->GetStaticMeshComponent()->GetStaticMesh();
 	StaticMesh->bAllowCPUAccess = true;
 	
 	// TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until
@@ -35,10 +33,11 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::CreateTriMesh(
 	GEOPROC_RESPONSE Response = GetVertices(LOD, TMesh, VertexCt);
 	if (Response == GEOPROC_SUCCESS) {
 		// optionally use passed-in transform
-		if (TForm != nullptr) {
+		if (DoTransform) {
 			FVector* Vertices = TMesh.Vertices.Get();
+			FTransform TForm = TMesh.MeshActor->GetTransform();
 			for (uint32 i = 0; i < VertexCt; i++) {
-				Vertices[i] = TForm->TransformPosition(Vertices[i]);
+				Vertices[i] = TForm.TransformPosition(Vertices[i]);
 			}
 		}
 		// populate mesh; fails if indices outside of reasonable bounds

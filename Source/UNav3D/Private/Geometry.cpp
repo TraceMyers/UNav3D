@@ -6,26 +6,28 @@
 namespace Geometry {
 
 	namespace {
-		
-		const FVector BaseExtent[BoundingBox::RECT_PRISM_PTS] {
+
+		// The unscaled extents of a bounding box
+		const FVector BaseExtent[RECT_PRISM_PTS] {
 			FVector(-1.0f, -1.0f, -1.0f),
-			FVector(1.0f, -1.0f, -1.0f),
-			FVector(-1.0f, 1.0f, -1.0f),
-			FVector(-1.0f, -1.0f, 1.0f),
-			FVector(1.0f, 1.0f, -1.0f),
-			FVector(1.0f, -1.0f, 1.0f),
-			FVector(-1.0f, 1.0f, 1.0f),
-			FVector(1.0f, 1.0f, 1.0f)
+			FVector( 1.0f, -1.0f, -1.0f),
+			FVector(-1.0f,  1.0f, -1.0f),
+			FVector(-1.0f, -1.0f,  1.0f),
+			FVector( 1.0f,  1.0f, -1.0f),
+			FVector( 1.0f, -1.0f,  1.0f),
+			FVector(-1.0f,  1.0f,  1.0f),
+			FVector( 1.0f,  1.0f,  1.0f)
 		};
-		
+
+		// populate BBox with vertices and precomputed overlap-checking values
 		void Internal_SetBoundingBox(BoundingBox& BBox, const FVector& Extent, const FTransform TForm, bool DoTransform) {
 			if (DoTransform) {
-				for (int i = 0; i < BoundingBox::RECT_PRISM_PTS; i++) {
+				for (int i = 0; i < RECT_PRISM_PTS; i++) {
 					BBox.Vertices[i] = TForm.TransformPositionNoScale(BaseExtent[i] * Extent);
 				}
 			}
 			else {
-				for (int i = 0; i < BoundingBox::RECT_PRISM_PTS; i++) {
+				for (int i = 0; i < RECT_PRISM_PTS; i++) {
 					BBox.Vertices[i] = BaseExtent[i] * Extent;
 				}
 			}
@@ -37,6 +39,9 @@ namespace Geometry {
 			}	
 		}
 		
+		// If the points were all on a line, you would only need to check magnitude; implicit scaling by cos(theta) in
+		// dot product does the work of checking in 3 dimensions
+		// Ref: https://math.stackexchange.com/questions/1472049/check-if-a-point-is-inside-a-rectangular-shaped-area-3d
 		bool Internal_IsPointInside(const BoundingBox& BBox, const FVector& Point) {
 			const FVector V = Point - BBox.Vertices[0];
 			float SideCheck = FVector::DotProduct(V, BBox.OverlapCheckVectors[0]);
@@ -63,6 +68,8 @@ namespace Geometry {
 			return true;
 		}
 
+		// Sometimes BBoxes will overlap without either having points in the other, but this can be checked with
+		// a line test
 		bool Internal_DoesLineSegmentIntersect(const BoundingBox& Box, const FVector& PointA, const FVector& PointB) {
 			return false;
 		}
@@ -80,14 +87,14 @@ namespace Geometry {
 		const FTransform TForm = BoxCmp->GetComponentTransform();
 		Internal_SetBoundingBox(BBox, Extent, TForm, DoTransform);	
 	}
-	
+
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB) {
-		for (int i = 0; i < BoundingBox::RECT_PRISM_PTS; i++) {
+		for (int i = 0; i < RECT_PRISM_PTS; i++) {
 			if (Internal_IsPointInside(BBoxA, BBoxB.Vertices[i])) {
 				return true;
 			}
 		}
-		for (int i = 0; i < BoundingBox::RECT_PRISM_PTS; i++) {
+		for (int i = 0; i < RECT_PRISM_PTS; i++) {
 			if (Internal_IsPointInside(BBoxB, BBoxA.Vertices[i])) {
 				return true;
 			}

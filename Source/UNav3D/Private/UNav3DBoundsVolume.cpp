@@ -22,15 +22,16 @@ void AUNav3DBoundsVolume::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime);
 }
 
-TArray<AStaticMeshActor*>& AUNav3DBoundsVolume::GetOverlappingStaticMeshActors() {
-	OverlappingMeshActors.Empty(32);
+void AUNav3DBoundsVolume::GetOverlappingMeshes(TArray<Geometry::TriMesh>& Meshes) {
+	Meshes.Empty(32);
 	
 	if (GEditor == nullptr || GEditor->GetEditorWorldContext().World() == nullptr) {
-		return OverlappingMeshActors;
+		return ;
 	}
+
+	Geometry::SetBoundingBox(OverlapBBox, BoundsBox);
 	
-	SetBoundsCheckValues();
-	
+	// iterate over all static mesh actors in the level and populate Meshes with overlaps
 	TArray<AActor*> FoundActors;
 	UGameplayStatics::GetAllActorsOfClass(
 		GEditor->GetEditorWorldContext().World(),
@@ -50,66 +51,18 @@ TArray<AStaticMeshActor*>& AUNav3DBoundsVolume::GetOverlappingStaticMeshActors()
 		if (Mesh == nullptr) {
 			continue;	
 		}
-		
-		const FVector Extents = Mesh->GetBoundingBox().GetExtent();
-		const FTransform TForm = FoundMesh->GetTransform();
-		for (int j = 0; j < RECT_PRISM_PTS; j++) {
-			FVector Vertex = TForm.TransformPosition(BaseExtents[j] * Extents);
-			if (IsPointInside(Vertex)) {
-				OverlappingMeshActors.Add(FoundMesh);
-				break;
-			}
-		}	
-	}
-	return OverlappingMeshActors;
-}
 
-
-void AUNav3DBoundsVolume::SetBoundsCheckValues() {
-	// we only need 4 vertices for overlap checking
-	FVector BoxVertices[4];
-	const FVector Extents = BoundsBox->GetScaledBoxExtent();
-	const FTransform TForm = BoundsBox->GetComponentTransform();
-	for (int i = 0; i < 4; i++) {
-		BoxVertices[i] = TForm.TransformPositionNoScale(BaseExtents[i] * Extents);
-	}
-	RefPoint = BoxVertices[0];
-	for (int i = 0; i < 3; i ++) {
-		IntersectionVectors[i] = BoxVertices[i + 1] - RefPoint;
-		IntersectionSqMags[i] = FVector::DotProduct(IntersectionVectors[i], IntersectionVectors[i]);	
+		Geometry::TriMesh TMesh;
+		TMesh.MeshActor = FoundMesh;
+		Geometry::SetBoundingBox(TMesh.Box, FoundMesh);
+		// DoBoundingBoxesOverlap() checks if B pts are in A first, so this order is helpful for resolving positive
+		// results faster
+		if (Geometry::DoBoundingBoxesOverlap(OverlapBBox, TMesh.Box)) {
+			Meshes.Add(TMesh);
+		}
 	}
 }
 
-// If the points were all on a line, you would only need to check magnitude; implicit scaling by cos(theta) in
-// dot product does the work of checking in 3 dimensions
-// Ref: https://math.stackexchange.com/questions/1472049/check-if-a-point-is-inside-a-rectangular-shaped-area-3d
-bool AUNav3DBoundsVolume::IsPointInside(const FVector& Point) const {
-	const FVector V = Point - RefPoint;
-	float SideCheck = FVector::DotProduct(V, IntersectionVectors[0]);
-	if (SideCheck <= 0.0f) {
-		return false;
-	}
-	if (SideCheck >= IntersectionSqMags[0]) {
-		return false;
-	}
-	SideCheck = FVector::DotProduct(V, IntersectionVectors[1]);
-	if (SideCheck <= 0.0f) {
-		return false;
-	}
-	if (SideCheck >= IntersectionSqMags[1]) {
-		return false;
-	}
-	SideCheck = FVector::DotProduct(V, IntersectionVectors[2]);
-	if (SideCheck <= 0.0f) {
-		return false;
-	}
-	if (SideCheck >= IntersectionSqMags[2]) {
-		return false;
-	}
-	return true;
-}
-
-// TODO: test whether or not bounding box edges of static meshes pass through BoundsBox
-bool AUNav3DBoundsVolume::DoesLineSegmentIntersect(const FVector& A, const FVector& B) {
-	return false;	
+void AUNav3DBoundsVolume::GetInnerTris(const Geometry::TriMesh& TMesh, TArray<int>& OutIndices) const {
+	
 }

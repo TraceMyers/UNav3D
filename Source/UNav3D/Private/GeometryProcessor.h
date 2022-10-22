@@ -22,7 +22,7 @@ public:
 	~GeometryProcessor();
 	
 	// Pulls Static Mesh data and populates TMesh with it. If TForm != nullptr, it will be used to transform the vertices
-	GEOPROC_RESPONSE CreateTriMesh(Geometry::TriMesh& TMesh, UStaticMesh* StaticMesh, const FTransform* TForm=nullptr) const;
+	GEOPROC_RESPONSE PopulateTriMesh(Geometry::TriMesh& TMesh, bool DoTransform=true) const;
 
 private:
 

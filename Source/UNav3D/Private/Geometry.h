@@ -3,13 +3,33 @@
 class AStaticMeshActor;
 class UBoxComponent;
 
+// TODO: consider creating a vertex buffer and tri buffer, grouping them together in memory
+
 namespace Geometry {
 
-	// Triangle; saves space by storing references to vertices on the TriMesh
+	static constexpr int RECT_PRISM_PTS = 8;
+	
+	// Triangle; saves space by storing references to vertices on the TriMesh; stores references to adjacent Tris
 	struct Tri {
+		
 		Tri(const FVector& _A, const FVector& _B, const FVector& _C) :
 			A(_A), B(_B), C(_C), Edges{nullptr}
 		{}
+
+		~Tri() {
+			for (int i = 0; i < 3; i++) {
+				if (Edges[i] != nullptr) {
+					Tri** EdgesOfEdge = Edges[i]->Edges;
+					for (int j = 0; j < 3; j++) {
+						if (EdgesOfEdge[j] == this) {
+							EdgesOfEdge[j] = nullptr;
+							break;
+						}
+					}
+				}
+			}		
+		}
+		
 		const FVector& A;
 		const FVector& B;
 		const FVector& C;
@@ -18,7 +38,6 @@ namespace Geometry {
 
 	// for storing world bounding box vertices of UBoxComponents and AStaticMeshActors' Meshes
 	struct BoundingBox {
-		static constexpr int RECT_PRISM_PTS = 8;
 		FVector Vertices[RECT_PRISM_PTS];
 		// precomputed data using Vertices
 		FVector OverlapCheckVectors[3];
@@ -29,6 +48,19 @@ namespace Geometry {
 	// reference, movement could be supported in the future; BoundingBox is used for initial tests - if two BB's overlap,
 	// the TriMeshes *might* overlap.
 	struct TriMesh {
+		
+		TriMesh() :
+			MeshActor(nullptr),
+			Box(),
+			VertexCt(0)
+		{}
+
+		~TriMesh() {
+			if (Vertices.IsValid()) {
+				Vertices.Release();
+			}
+		}
+		
 		AStaticMeshActor* MeshActor;
 		BoundingBox Box;
 		int VertexCt;

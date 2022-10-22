@@ -20,6 +20,8 @@
 #include <windows.h>
 #include <stdio.h>
 
+#include "GeometryProcessor.h"
+
 #define LOCTEXT_NAMESPACE "UNav3D"
 
 static const FName UNav3DTabName("UNav3D");
@@ -60,27 +62,36 @@ void FUNav3DModule::PluginButtonClicked(){
 		return;
 	}
 
+	// If we find a single UNav3DBoundsVolume in the editor world, we're good
 	if (!SetBoundsVolume()) {
 		return;
 	}
 
 	// starting up progress bar
-	constexpr int TotalCalls = 1;
+	constexpr int TotalCalls = 2;
 	FScopedSlowTask ProgressTask(TotalCalls, FText::FromString("Generating UNav3D Data"));
 	ProgressTask.MakeDialog(true);
 
-	TArray<AStaticMeshActor*>& StaticMeshes = BoundsVolume->GetOverlappingStaticMeshActors();
-	if (StaticMeshes.Num() == 0) {
+	// find overlapping static mesh actors
+	TArray<Geometry::TriMesh> TMeshes;
+	BoundsVolume->GetOverlappingMeshes(TMeshes);
+	if (TMeshes.Num() == 0) {
 		UNAV_GENERR("No static mesh actors found inside the bounds volume.")
 		return;
 	}
 	ProgressTask.EnterProgressFrame();
 
 #ifdef UNAV_DBG
-	for (int i = 0; i < StaticMeshes.Num(); i++) {
-		printf("found mesh: %s\n", TCHAR_TO_ANSI(*StaticMeshes[i]->GetName()));
+	for (int i = 0; i < TMeshes.Num(); i++) {
+		printf("found mesh: %s\n", TCHAR_TO_ANSI(*TMeshes[i].MeshActor->GetName()));
 	}
 #endif
+
+	// getting geometry data and populating the TriMeshes with it
+	for (int i = 0; i < TMeshes.Num(); i++) {
+		GeomProcessor.PopulateTriMesh(TMeshes[i]);
+	}
+	ProgressTask.EnterProgressFrame();
 	
 }
 

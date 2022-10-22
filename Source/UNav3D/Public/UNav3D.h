@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
+#include "GeometryProcessor.h"
 
 #define LOCTEXT_NAMESPACE "UNav3D"
 #define UNAV_GENMSG(x) \
@@ -37,6 +38,7 @@ private:
 	
 	TSharedPtr<FUICommandList> PluginCommands;
 	AUNav3DBoundsVolume* BoundsVolume;
+	GeometryProcessor GeomProcessor;
 	
 };
 
