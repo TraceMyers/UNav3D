@@ -80,29 +80,30 @@ void AUNav3DBoundsVolume::SetBoundsCheckValues() {
 	}
 }
 
-// Checks in a way that reduces comparisons by subtracting the point from a BoundsBox point
+// If the points were all on a line, you would only need to check magnitude; implicit scaling by cos(theta) in
+// dot product does the work of checking in 3 dimensions
 // Ref: https://math.stackexchange.com/questions/1472049/check-if-a-point-is-inside-a-rectangular-shaped-area-3d
 bool AUNav3DBoundsVolume::IsPointInside(const FVector& Point) const {
 	const FVector V = Point - RefPoint;
-	float SideCheckA = FVector::DotProduct(V, IntersectionVectors[0]);
-	if (SideCheckA <= 0.0f) {
+	float SideCheck = FVector::DotProduct(V, IntersectionVectors[0]);
+	if (SideCheck <= 0.0f) {
 		return false;
 	}
-	if (SideCheckA >= IntersectionSqMags[0]) {
+	if (SideCheck >= IntersectionSqMags[0]) {
 		return false;
 	}
-	SideCheckA = FVector::DotProduct(V, IntersectionVectors[1]);
-	if (SideCheckA <= 0.0f) {
+	SideCheck = FVector::DotProduct(V, IntersectionVectors[1]);
+	if (SideCheck <= 0.0f) {
 		return false;
 	}
-	if (SideCheckA >= IntersectionSqMags[1]) {
+	if (SideCheck >= IntersectionSqMags[1]) {
 		return false;
 	}
-	SideCheckA = FVector::DotProduct(V, IntersectionVectors[2]);
-	if (SideCheckA <= 0.0f) {
+	SideCheck = FVector::DotProduct(V, IntersectionVectors[2]);
+	if (SideCheck <= 0.0f) {
 		return false;
 	}
-	if (SideCheckA >= IntersectionSqMags[2]) {
+	if (SideCheck >= IntersectionSqMags[2]) {
 		return false;
 	}
 	return true;

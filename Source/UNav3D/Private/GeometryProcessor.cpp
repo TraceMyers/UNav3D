@@ -13,31 +13,44 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::CreateTriMesh(
 	UStaticMesh* StaticMesh,
 	const FTransform* TForm
 ) const {
+	// forcing CPU access to the mesh seems like the most user-friendly option
 	StaticMesh->bAllowCPUAccess = true;
+	
+	// TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until
+	// there is a good system in place to take that input from the user
 	const FStaticMeshLODResources& LOD = StaticMesh->GetRenderData()->LODResources[0];
 	
 	TMesh.VertexCt = 0;
-	TMesh.Vertices = nullptr;
-
-	// Getting Static Mesh Vertices and Indices
-	// Vertices[Indices[0]] = Tri0.A, Vertices[Indices[1]] = Tri0.B, Vertices[Indices[2]] = Tri0.C,
-	// Vertices[Indices[3]] = Tri1.A ... and so on
+	if (TMesh.Vertices.IsValid()) {
+		TMesh.Vertices.Reset();
+	}
 	uint32 IndexCt;
 	uint32 VertexCt;
+	
 	uint16* Indices = GetIndices(LOD, IndexCt);
-	FVector* Vertices = GetVertices(LOD, VertexCt);
-
-	if (TForm != nullptr) {
-		for (uint32 i = 0; i < VertexCt; i++) {
-			Vertices[i] = TForm->TransformPosition(Vertices[i]);
+	if (Indices == nullptr) {
+		return GEOPROC_ALLOC_FAIL;
+	}
+	
+	GEOPROC_RESPONSE Response = GetVertices(LOD, TMesh, VertexCt);
+	if (Response == GEOPROC_SUCCESS) {
+		// optionally use passed-in transform
+		if (TForm != nullptr) {
+			FVector* Vertices = TMesh.Vertices.Get();
+			for (uint32 i = 0; i < VertexCt; i++) {
+				Vertices[i] = TForm->TransformPosition(Vertices[i]);
+			}
+		}
+		// populate mesh; fails if indices outside of reasonable bounds
+		Response = PopulateTriMesh(TMesh, Indices, IndexCt, VertexCt);
+		if (Response == GEOPROC_SUCCESS) {
+			return Response;
 		}
 	}
-
-	const GEOPROC_RESPONSE Response = PopulateTriMesh(TMesh, Indices, Vertices, IndexCt, VertexCt);
-	if (Response != GEOPROC_SUCCESS) {
-		delete Vertices;
+	
+	if (TMesh.Vertices.IsValid()) {
+		TMesh.Vertices.Reset();
 	}
-
 	delete Indices;
 	return Response;
 }
@@ -45,6 +58,9 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::CreateTriMesh(
 uint16* GeometryProcessor::GetIndices(const FStaticMeshLODResources& LOD, uint32& IndexCt) const {
 	IndexCt = LOD.IndexBuffer.IndexBufferRHI->GetSize() / sizeof(uint16);
 	uint16* TriIndices = new uint16[IndexCt];
+	if (TriIndices == nullptr) {
+		return nullptr;
+	}
 	const FRawStaticIndexBuffer* IndBuf = &LOD.IndexBuffer;
 
 	// Asking the GPU to kindly relinquish the goods
@@ -65,9 +81,17 @@ uint16* GeometryProcessor::GetIndices(const FStaticMeshLODResources& LOD, uint32
 	return TriIndices;
 }
 
-FVector* GeometryProcessor::GetVertices(const FStaticMeshLODResources& LOD, uint32& VertexCt) const {
+GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::GetVertices(
+	const FStaticMeshLODResources& LOD,
+	Geometry::TriMesh& TMesh,
+	uint32& VertexCt
+) const {
 	VertexCt = LOD.VertexBuffers.PositionVertexBuffer.GetNumVertices();
-	FVector* Vertices = new FVector[VertexCt];
+	TMesh.Vertices = MakeUnique<FVector[]>(VertexCt);
+	if (!TMesh.Vertices.IsValid()) {
+		return GEOPROC_ALLOC_FAIL;
+	}
+	FVector* Vertices = TMesh.Vertices.Get();
 	const FPositionVertexBuffer* PosBuf = &LOD.VertexBuffers.PositionVertexBuffer;
 	
 	// Asking the GPU to kindly relinquish the goods
@@ -85,13 +109,12 @@ FVector* GeometryProcessor::GetVertices(const FStaticMeshLODResources& LOD, uint
 	);
 	FlushRenderingCommands();
 
-	return Vertices;
+	return GEOPROC_SUCCESS;
 }
 
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(
 	Geometry::TriMesh& TMesh,
 	uint16* Indices,
-	FVector* Vertices,
 	uint32 IndexCt,
 	uint32 VertexCt
 ) {
@@ -105,8 +128,11 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(
 	if (IndexMax > VertexCt) {
 		return GEOPROC_ERR_BAD_INDEX_MAX;	
 	}
-	
+
+	// Vertices[Indices[0]] = Tri0.A, Vertices[Indices[1]] = Tri0.B, Vertices[Indices[2]] = Tri0.C,
+	// Vertices[Indices[3]] = Tri1.A ... and so on
 	const uint32 VEnd = VertexCt - 3;
+	const FVector* Vertices = TMesh.Vertices.Get();
 	for (uint16* IndexPtr = Indices; (Indices - IndexPtr) < VEnd; ) {
 		const uint16& AIndex = *IndexPtr++;
 		const uint16& BIndex = *IndexPtr++;
@@ -129,7 +155,6 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(
 		Geometry::Tri T(A, B, C);
 		TMesh.Tris.Add(T);
 	}
-	TMesh.Vertices = Vertices;
 	TMesh.VertexCt = VertexCt;
 	
 	return GEOPROC_SUCCESS;

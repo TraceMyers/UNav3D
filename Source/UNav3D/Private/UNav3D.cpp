@@ -86,11 +86,16 @@ void FUNav3DModule::PluginButtonClicked(){
 	TArray<AStaticMeshActor*>& StaticMeshes = BoundsVolume->GetOverlappingStaticMeshActors();
 	if (StaticMeshes.Num() == 0) {
 		UNAV_GENERR("No static mesh actors found inside the bounds volume.")
+		return;
 	}
+	ProgressTask.EnterProgressFrame();
+
+#ifdef UNAV_DBG
 	for (int i = 0; i < StaticMeshes.Num(); i++) {
 		printf("found mesh: %s\n", TCHAR_TO_ANSI(*StaticMeshes[i]->GetName()));
 	}
-	ProgressTask.EnterProgressFrame();
+#endif
+	
 }
 
 void FUNav3DModule::RegisterMenus() {
