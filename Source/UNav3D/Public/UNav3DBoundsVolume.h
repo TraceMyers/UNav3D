@@ -23,6 +23,10 @@ public:
 
 	// fills OutVertices with any tri indices in TMesh that are also inside the bounds volume
 	void GetInnerTris(const Geometry::TriMesh& TMesh, TArray<int>& OutIndices) const;
+
+#ifdef UNAV_BNDVOL_DBG
+	const FVector* GetVertices() const;
+#endif
 	
 	UPROPERTY(BlueprintReadWrite, VisibleDefaultsOnly)
 	UStaticMeshComponent* BoundsMesh;

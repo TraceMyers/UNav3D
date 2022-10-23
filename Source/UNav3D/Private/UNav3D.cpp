@@ -6,9 +6,10 @@
 #include "UNav3DBoundsVolume.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/ScopedSlowTask.h"
-#include "DebugSwitches.h"
+#include "Debug.h"
 #include "Engine/StaticMeshActor.h"
-#include "UNav3DBoundsVolume.h"
+#include "DebugMarker.h"
+#include "GeometryProcessor.h"
 
 // using the default windows package define; would be better to determine this
 #define _WIN32_WINNT_WIN10_TH2 0
@@ -20,7 +21,8 @@
 #include <windows.h>
 #include <stdio.h>
 
-#include "GeometryProcessor.h"
+#include "DrawDebugHelpers.h"
+
 
 #define LOCTEXT_NAMESPACE "UNav3D"
 
@@ -44,7 +46,7 @@ void FUNav3DModule::StartupModule() {
 	FILE *pFile = nullptr;
 	AllocConsole();
 	freopen_s(&pFile, "CONOUT$", "w", stdout);
-	printf("hello sailor\n");
+	printf("Hello sailor!\n");
 #endif
 }
 
@@ -61,6 +63,7 @@ void FUNav3DModule::PluginButtonClicked(){
 		UNAV_GENERR("GEditor or World Unavailable")
 		return;
 	}
+	UWorld* World = GEditor->GetEditorWorldContext().World();
 
 	// If we find a single UNav3DBoundsVolume in the editor world, we're good
 	if (!SetBoundsVolume()) {
@@ -72,27 +75,12 @@ void FUNav3DModule::PluginButtonClicked(){
 	FScopedSlowTask ProgressTask(TotalCalls, FText::FromString("Generating UNav3D Data"));
 	ProgressTask.MakeDialog(true);
 
-	// find overlapping static mesh actors
+	// populate TriMeshes with vertices, tris
 	TArray<Geometry::TriMesh> TMeshes;
-	BoundsVolume->GetOverlappingMeshes(TMeshes);
-	if (TMeshes.Num() == 0) {
-		UNAV_GENERR("No static mesh actors found inside the bounds volume.")
+	if (!PopulateTriMeshes(World, TMeshes, ProgressTask)) {
 		return;
 	}
-	ProgressTask.EnterProgressFrame();
 
-#ifdef UNAV_DBG
-	for (int i = 0; i < TMeshes.Num(); i++) {
-		printf("found mesh: %s\n", TCHAR_TO_ANSI(*TMeshes[i].MeshActor->GetName()));
-	}
-#endif
-
-	// getting geometry data and populating the TriMeshes with it
-	for (int i = 0; i < TMeshes.Num(); i++) {
-		GeomProcessor.PopulateTriMesh(TMeshes[i]);
-	}
-	ProgressTask.EnterProgressFrame();
-	
 }
 
 void FUNav3DModule::RegisterMenus() {
@@ -138,6 +126,39 @@ bool FUNav3DModule::SetBoundsVolume() {
 		return false;
 	}
 	BoundsVolume = Cast<AUNav3DBoundsVolume>(FoundActors[0]);
+	return true;
+}
+
+bool FUNav3DModule::PopulateTriMeshes(
+	UWorld* World,
+	TArray<Geometry::TriMesh>& TMeshes,
+	FScopedSlowTask& ProgressTask
+) {
+	// find overlapping static mesh actors
+	BoundsVolume->GetOverlappingMeshes(TMeshes);
+	if (TMeshes.Num() == 0) {
+		UNAV_GENERR("No static mesh actors found inside the bounds volume.")
+		return false;
+	}
+	ProgressTask.EnterProgressFrame();
+
+	DRAW_TRIMESH_BOUNDING_BOXES(World, TMeshes)
+
+	// getting geometry data and populating the TriMeshes with it
+	for (int i = 0; i < TMeshes.Num(); i++) {
+		const GeometryProcessor::GEOPROC_RESPONSE Response = GeomProcessor.PopulateTriMesh(TMeshes[i]);
+		if (Response == GeometryProcessor::GEOPROC_HIGH_INDEX) {
+			UNAV_GENERR("One of the meshes was not processed correctly due to a bad index coming from the index buffer")
+		}
+		else if (Response == GeometryProcessor::GEOPROC_ALLOC_FAIL) {
+			UNAV_GENERR("The Geometry Processor failed to allocate enough space for a mesh.")
+		}
+		PRINT_GEOPROC_NEGATIVE_RESPONSE(TMeshes[i], Response);
+		PRINT_TRIMESH_VERTEX_CT(TMeshes[i])
+		DRAW_TRIMESH_VERTICES(World, TMeshes[i]);
+	}
+	ProgressTask.EnterProgressFrame();
+	
 	return true;
 }
 

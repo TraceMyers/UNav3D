@@ -39,6 +39,7 @@ public class UNav3D : ModuleRules
 				"ToolMenus",
 				"CoreUObject",
 				"Engine",
+				"CoreUObject",
 				"Slate",
 				"SlateCore",
 				"RenderCore",

@@ -3,6 +3,11 @@
 #include "Engine/StaticMeshActor.h"
 #include "Kismet/GameplayStatics.h"
 
+// TODO: NavGraph will just reference TriMesh memory for node placement; a "Node" can be a reference to a tri
+// TODO: have different kinds of nodes: Intersections and Throughways; Intersections require logic to decide.. 
+// TODO: ... where to go; Throughways are bi-directional connectors to Intersections. Instead of 'node net normalization' ...
+// TODO: ... just try to create a network of Intersections that are fairly evenly spaced except at critical rotation points
+
 AUNav3DBoundsVolume::AUNav3DBoundsVolume() {
 	PrimaryActorTick.bCanEverTick = false;
 
@@ -66,3 +71,9 @@ void AUNav3DBoundsVolume::GetOverlappingMeshes(TArray<Geometry::TriMesh>& Meshes
 void AUNav3DBoundsVolume::GetInnerTris(const Geometry::TriMesh& TMesh, TArray<int>& OutIndices) const {
 	
 }
+
+#ifdef UNAV_BNDVOL_DBG
+const FVector* AUNav3DBoundsVolume::GetVertices() const {
+	return OverlapBBox.Vertices;
+}
+#endif

@@ -1,26 +1,32 @@
 ﻿#include "GeometryProcessor.h"
+
+#include "DebugMarker.h"
 #include "Geometry.h"
 #include "Rendering/PositionVertexBuffer.h"
 #include "RenderingThread.h"
-#include "DebugSwitches.h"
+#include "Debug.h"
 #include "Engine/StaticMeshActor.h"
 
 GeometryProcessor::GeometryProcessor() {}
 
 GeometryProcessor::~GeometryProcessor() {}
 
-GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(Geometry::TriMesh& TMesh, bool DoTransform) const {
+GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(
+	Geometry::TriMesh& TMesh,
+	bool DoTransform
+) const {
 	// forcing CPU access to the mesh seems like the most user-friendly option
 	UStaticMesh* StaticMesh = TMesh.MeshActor->GetStaticMeshComponent()->GetStaticMesh();
 	StaticMesh->bAllowCPUAccess = true;
 	
-	// TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until
-	// there is a good system in place to take that input from the user
+	// TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until...
+	// TODO: ... there is a good system in place to take that input from the user
 	const FStaticMeshLODResources& LOD = StaticMesh->GetRenderData()->LODResources[0];
 	
 	TMesh.VertexCt = 0;
-	if (TMesh.Vertices.IsValid()) {
-		TMesh.Vertices.Reset();
+	if (TMesh.Vertices != nullptr) {
+		delete TMesh.Vertices;
+		TMesh.Vertices = nullptr;
 	}
 	uint32 IndexCt;
 	uint32 VertexCt;
@@ -34,21 +40,22 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(Geometry:
 	if (Response == GEOPROC_SUCCESS) {
 		// optionally use passed-in transform
 		if (DoTransform) {
-			FVector* Vertices = TMesh.Vertices.Get();
-			FTransform TForm = TMesh.MeshActor->GetTransform();
+			FVector* Vertices = TMesh.Vertices;
+			const FTransform TForm = TMesh.MeshActor->GetTransform();
 			for (uint32 i = 0; i < VertexCt; i++) {
 				Vertices[i] = TForm.TransformPosition(Vertices[i]);
 			}
 		}
 		// populate mesh; fails if indices outside of reasonable bounds
-		Response = PopulateTriMesh(TMesh, Indices, IndexCt, VertexCt);
+		Response = Populate(TMesh, Indices, IndexCt, VertexCt);
 		if (Response == GEOPROC_SUCCESS) {
 			return Response;
 		}
 	}
 	
-	if (TMesh.Vertices.IsValid()) {
-		TMesh.Vertices.Reset();
+	if (TMesh.Vertices != nullptr) {
+		delete TMesh.Vertices;
+		TMesh.Vertices = nullptr;
 	}
 	delete Indices;
 	return Response;
@@ -86,11 +93,11 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::GetVertices(
 	uint32& VertexCt
 ) const {
 	VertexCt = LOD.VertexBuffers.PositionVertexBuffer.GetNumVertices();
-	TMesh.Vertices = MakeUnique<FVector[]>(VertexCt);
-	if (!TMesh.Vertices.IsValid()) {
+	TMesh.Vertices = new FVector[VertexCt];
+	if (TMesh.Vertices == nullptr) {
 		return GEOPROC_ALLOC_FAIL;
 	}
-	FVector* Vertices = TMesh.Vertices.Get();
+	FVector* Vertices = TMesh.Vertices;
 	const FPositionVertexBuffer* PosBuf = &LOD.VertexBuffers.PositionVertexBuffer;
 	
 	// Asking the GPU to kindly relinquish the goods
@@ -111,46 +118,27 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::GetVertices(
 	return GEOPROC_SUCCESS;
 }
 
-GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(
+GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
 	Geometry::TriMesh& TMesh,
 	uint16* Indices,
 	uint32 IndexCt,
 	uint32 VertexCt
 ) {
-	uint16 IndexMax = 0;
 	for (uint32 i = 0; i < IndexCt; i++) {
 		const uint16& Index = Indices[i];
-		if (Index > IndexMax) {
-			IndexMax = Index;
+		if (Index > VertexCt) {
+			return GEOPROC_HIGH_INDEX;	
 		}
-	}
-	if (IndexMax > VertexCt) {
-		return GEOPROC_ERR_BAD_INDEX_MAX;	
 	}
 
 	// Vertices[Indices[0]] = Tri0.A, Vertices[Indices[1]] = Tri0.B, Vertices[Indices[2]] = Tri0.C,
 	// Vertices[Indices[3]] = Tri1.A ... and so on
 	const uint32 VEnd = VertexCt - 3;
-	const FVector* Vertices = TMesh.Vertices.Get();
-	for (uint16* IndexPtr = Indices; (Indices - IndexPtr) < VEnd; ) {
-		const uint16& AIndex = *IndexPtr++;
-		const uint16& BIndex = *IndexPtr++;
-		const uint16& CIndex = *IndexPtr++;
-
-		if (
-			AIndex < 0 || AIndex >= IndexMax
-			|| BIndex < 0 || BIndex >= IndexMax
-			|| CIndex < 0 || CIndex >= IndexMax
-		) {
-#ifdef UNAV_GEO_DBG
-			return GEOPROC_ERR_BAD_INDEX;
-#endif
-			continue;
-		}
-
-		const FVector& A = Vertices[AIndex];
-		const FVector& B = Vertices[BIndex];
-		const FVector& C = Vertices[CIndex];
+	const FVector* Vertices = TMesh.Vertices;
+	for (uint16* IndexPtr = Indices; (IndexPtr - Indices) <= VEnd; ) {
+		const FVector& A = Vertices[*IndexPtr++];
+		const FVector& B = Vertices[*IndexPtr++];
+		const FVector& C = Vertices[*IndexPtr++];
 		Geometry::Tri T(A, B, C);
 		TMesh.Tris.Add(T);
 	}

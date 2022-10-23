@@ -13,8 +13,7 @@ public:
 
 	enum GEOPROC_RESPONSE {
 		GEOPROC_SUCCESS,
-		GEOPROC_ERR_BAD_INDEX_MAX,
-		GEOPROC_ERR_BAD_INDEX,
+		GEOPROC_HIGH_INDEX,
 		GEOPROC_ALLOC_FAIL
 	};
 
@@ -33,7 +32,7 @@ private:
 	GEOPROC_RESPONSE GetVertices(const FStaticMeshLODResources& LOD, Geometry::TriMesh& TMesh, uint32& VertexCt) const;
 	
 	// Populates TMesh with Tris given the previously filled vertex and index buffers
-	static GEOPROC_RESPONSE PopulateTriMesh(
+	static GEOPROC_RESPONSE Populate(
 		Geometry::TriMesh& TMesh,
 		uint16* Indices,
 		uint32 IndexCt,

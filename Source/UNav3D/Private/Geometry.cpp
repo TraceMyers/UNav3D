@@ -1,5 +1,4 @@
 ﻿#include "Geometry.h"
-
 #include "Components/BoxComponent.h"
 #include "Engine/StaticMeshActor.h"
 
@@ -9,26 +8,32 @@ namespace Geometry {
 
 		// The unscaled extents of a bounding box
 		const FVector BaseExtent[RECT_PRISM_PTS] {
-			FVector(-1.0f, -1.0f, -1.0f),
+			FVector(-1.0f, -1.0f, -1.0f), // neighbors 1, 2, 3
 			FVector( 1.0f, -1.0f, -1.0f),
 			FVector(-1.0f,  1.0f, -1.0f),
 			FVector(-1.0f, -1.0f,  1.0f),
-			FVector( 1.0f,  1.0f, -1.0f),
-			FVector( 1.0f, -1.0f,  1.0f),
-			FVector(-1.0f,  1.0f,  1.0f),
+			FVector( 1.0f,  1.0f, -1.0f), // neighbors 1, 2, 7
+			FVector( 1.0f, -1.0f,  1.0f), // neighbors 1, 3, 7
+			FVector(-1.0f,  1.0f,  1.0f), // neighbors 2, 3, 7
 			FVector( 1.0f,  1.0f,  1.0f)
 		};
 
 		// populate BBox with vertices and precomputed overlap-checking values
-		void Internal_SetBoundingBox(BoundingBox& BBox, const FVector& Extent, const FTransform TForm, bool DoTransform) {
-			if (DoTransform) {
+		void Internal_SetBoundingBox(
+			BoundingBox& BBox,
+			const FVector& Extent,
+			const FTransform TForm,
+			const FVector& Center,
+			bool IsStaticMesh
+		) {
+			if (IsStaticMesh) {
 				for (int i = 0; i < RECT_PRISM_PTS; i++) {
-					BBox.Vertices[i] = TForm.TransformPositionNoScale(BaseExtent[i] * Extent);
+					BBox.Vertices[i] = TForm.TransformPosition(BaseExtent[i] * Extent) + Center;
 				}
 			}
 			else {
 				for (int i = 0; i < RECT_PRISM_PTS; i++) {
-					BBox.Vertices[i] = BaseExtent[i] * Extent;
+					BBox.Vertices[i] = TForm.TransformPositionNoScale(BaseExtent[i] * Extent);
 				}
 			}
 			const FVector& RefPoint = BBox.Vertices[0];
@@ -76,16 +81,18 @@ namespace Geometry {
 
 	}
 	
-	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor, bool DoTransform) {
-		const FVector Extent = MeshActor->GetStaticMeshComponent()->GetStaticMesh()->GetBoundingBox().GetExtent();
+	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor) {
+		const FBox MeshFBox = MeshActor->GetStaticMeshComponent()->GetStaticMesh()->GetBoundingBox();
+		const FVector Extent = MeshFBox.GetExtent();
+		const FVector Center = MeshFBox.GetCenter();
 		const FTransform TForm = MeshActor->GetTransform();
-		Internal_SetBoundingBox(BBox, Extent, TForm, DoTransform);	
+		Internal_SetBoundingBox(BBox, Extent, TForm, Center, true);
 	}
 
-	void SetBoundingBox(BoundingBox& BBox, const UBoxComponent* BoxCmp, bool DoTransform) {
+	void SetBoundingBox(BoundingBox& BBox, const UBoxComponent* BoxCmp) {
 		const FVector Extent = BoxCmp->GetScaledBoxExtent();
 		const FTransform TForm = BoxCmp->GetComponentTransform();
-		Internal_SetBoundingBox(BBox, Extent, TForm, DoTransform);	
+		Internal_SetBoundingBox(BBox, Extent, TForm, FVector::ZeroVector, false);	
 	}
 
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB) {

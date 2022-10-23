@@ -4,6 +4,8 @@
 #include "Modules/ModuleManager.h"
 #include "GeometryProcessor.h"
 
+// TODO: UNav3D should have no private includes
+
 #define LOCTEXT_NAMESPACE "UNav3D"
 #define UNAV_GENMSG(x) \
 	FMessageDialog::Open( \
@@ -34,7 +36,8 @@ private:
 
 	void RegisterMenus();
 
-	bool SetBoundsVolume();	
+	bool SetBoundsVolume();
+	bool PopulateTriMeshes(UWorld* World, TArray<Geometry::TriMesh>& TriMeshes, FScopedSlowTask& ProgressTask);
 	
 	TSharedPtr<FUICommandList> PluginCommands;
 	AUNav3DBoundsVolume* BoundsVolume;
