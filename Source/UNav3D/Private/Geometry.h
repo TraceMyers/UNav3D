@@ -40,10 +40,15 @@ namespace Geometry {
 		Tri* Edges[3]; // adjacent tris touching AB, BC, and CA in that order
 	};
 
-	// for storing world bounding box vertices of UBoxComponents and AStaticMeshActors' Meshes
+	// For storing world bounding box vertices of UBoxComponents and AStaticMeshActors' Meshes.
+	// When these overlap, we consider the possibility that the static meshes inside the boxes overlap.
+	// This implementation of a bounding box includes rotations, which makes it a little more computationally
+	// expensive to check if a point lies inside or if a line intersects a face. However, this saves processor time
+	// in the long run since *far* more work is done checking where meshes overlap, if they potentially overlap. And,
+	// bounding boxes that rotate with meshes are much smaller, thus giving less false positives.
 	struct BoundingBox {
 		FVector Vertices[RECT_PRISM_PTS];
-		// precomputed data using Vertices
+		// -- precomputed data for overlap checking using Vertices --
 		FVector OverlapCheckVectors[3];
 		float OverlapCheckSqMags[3];
 	};
