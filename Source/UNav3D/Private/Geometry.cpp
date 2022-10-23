@@ -28,7 +28,8 @@ namespace Geometry {
 		) {
 			if (IsStaticMesh) {
 				for (int i = 0; i < RECT_PRISM_PTS; i++) {
-					BBox.Vertices[i] = TForm.TransformPosition(BaseExtent[i] * Extent) + Center;
+					const FVector RotatedCenter = TForm.TransformVector(Center);
+					BBox.Vertices[i] = TForm.TransformPosition(BaseExtent[i] * Extent) + RotatedCenter;
 				}
 			}
 			else {
