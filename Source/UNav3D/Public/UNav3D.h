@@ -28,15 +28,18 @@ public:
 	/** IModuleInterface implementation */
 	virtual void StartupModule() override;
 	virtual void ShutdownModule() override;
-	
-	/** This function will be bound to Command. */
+
+	// Runs whenever the button at the top of the editor is clicked; current entry point for all plugin functionality
 	void PluginButtonClicked();
 	
 private:
 
 	void RegisterMenus();
 
+	// Finds bounds volume in editor viewport; returns false if number of bounds volumes is not 1
 	bool SetBoundsVolume();
+
+	// Takes meshes found inside bounds volume and populates TriMeshes with their data
 	bool PopulateTriMeshes(UWorld* World, TArray<Geometry::TriMesh>& TriMeshes, FScopedSlowTask& ProgressTask) const;
 	
 	TSharedPtr<FUICommandList> PluginCommands;
