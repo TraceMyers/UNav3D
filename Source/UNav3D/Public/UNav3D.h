@@ -37,7 +37,7 @@ private:
 	void RegisterMenus();
 
 	bool SetBoundsVolume();
-	bool PopulateTriMeshes(UWorld* World, TArray<Geometry::TriMesh>& TriMeshes, FScopedSlowTask& ProgressTask);
+	bool PopulateTriMeshes(UWorld* World, TArray<Geometry::TriMesh>& TriMeshes, FScopedSlowTask& ProgressTask) const;
 	
 	TSharedPtr<FUICommandList> PluginCommands;
 	AUNav3DBoundsVolume* BoundsVolume;

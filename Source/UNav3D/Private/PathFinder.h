@@ -8,7 +8,7 @@ public:
 
 	FPathFinder();
 	virtual ~FPathFinder() override;
-	// using these two is a pattern for reusability of an FRunnable object
+	// for reusability of FPathFinder
 	bool StartThread();
 	void StopThread();
 	

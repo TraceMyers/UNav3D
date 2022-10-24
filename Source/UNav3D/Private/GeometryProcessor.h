@@ -7,7 +7,6 @@ namespace Geometry {
 }
 
 class GeometryProcessor {
-
 	
 public:
 
@@ -22,6 +21,13 @@ public:
 	
 	// Pulls Static Mesh data and populates TMesh with it. If TForm != nullptr, it will be used to transform the vertices
 	GEOPROC_RESPONSE PopulateTriMesh(Geometry::TriMesh& TMesh, bool DoTransform=true) const;
+
+	// Takes Populated TriMeshes, groups them by overlap, and reforms the overlapped meshes into continuous meshes
+	// Populates OutMeshes, Empties InMeshes
+	GEOPROC_RESPONSE ReformTriMeshes(
+		TArray<Geometry::TriMesh>& InMeshes,
+		TArray<Geometry::TriMesh>& OutMeshes
+	);
 
 private:
 
@@ -38,5 +44,12 @@ private:
 		uint32 IndexCt,
 		uint32 VertexCt
 	);
+
+	// Group Meshes together if they overlap
+	static void GetIntersectGroups(
+		TArray<TArray<Geometry::TriMesh*>>& Groups,
+		TArray<Geometry::TriMesh>& InMeshes
+	);
+	
 };
 

@@ -81,6 +81,8 @@ void FUNav3DModule::PluginButtonClicked(){
 		return;
 	}
 
+	TArray<Geometry::TriMesh> ReformedTMeshes;
+	GeomProcessor.ReformTriMeshes(TMeshes, ReformedTMeshes);
 }
 
 void FUNav3DModule::RegisterMenus() {
@@ -133,7 +135,7 @@ bool FUNav3DModule::PopulateTriMeshes(
 	UWorld* World,
 	TArray<Geometry::TriMesh>& TMeshes,
 	FScopedSlowTask& ProgressTask
-) {
+) const {
 	// find overlapping static mesh actors
 	BoundsVolume->GetOverlappingMeshes(TMeshes);
 	if (TMeshes.Num() == 0) {

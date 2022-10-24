@@ -10,6 +10,6 @@ public:
 
 private:
 	
-	TArray<Geometry::TriMesh> Meshes;
+	TArray<Geometry::TriMesh> TMeshes;
 	
 };

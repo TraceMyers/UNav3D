@@ -82,6 +82,17 @@ namespace Geometry {
 			return this->MeshActor == OtherMesh.MeshActor;	
 		}
 
+		void ResetVertexData() {
+			VertexCt = 0;
+			if (Vertices != nullptr) {
+				delete Vertices;
+				Vertices = nullptr;
+			}
+			if (Tris.Num() > 0) {
+				Tris.Empty();
+			}
+		}
+
 		AStaticMeshActor* MeshActor;
 		BoundingBox Box;
 		int VertexCt;
@@ -105,5 +116,14 @@ namespace Geometry {
 	// Checks whether or not the two bounding boxes overlap. Doing our own overlap checking in editor appears to be
 	// necessary, as UBoxComponents will not report overlaps with AStaticMeshActor until play starts
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB);
+
+	// Checks whether two meshes overlap. May give false negatives due to imprecision of line trace checking; true if
+	// any overlaps
+	bool GetTriMeshIntersections (
+		TArray<int>& OverlapIndices,
+		const TArray<int>& PotentialOverlapIndices,
+		const TriMesh& TMesh,
+		const TArray<TriMesh>& Meshes
+	);
 	
 }
