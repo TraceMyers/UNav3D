@@ -8,6 +8,7 @@ class UBoxComponent;
 namespace Geometry {
 
 	static constexpr int RECT_PRISM_PTS = 8;
+	static constexpr float ONE_THIRD = 1.0f / 3.0f;
 	
 	// Triangle; saves space by storing references to vertices on the TriMesh; stores references to adjacent Tris
 	// Edges must be re-pointed if Tri's container reallocates
@@ -15,8 +16,10 @@ namespace Geometry {
 		
 		Tri(const FVector& _A, const FVector& _B, const FVector& _C) :
 			A(_A), B(_B), C(_C),
-			Normal(FVector::CrossProduct(_B - _A, _C - _A).GetSafeNormal()),
-			Edges{nullptr}
+			Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
+			Edges{nullptr},
+			Center((_A + _B + _C) * ONE_THIRD),
+			SqPerimeter(FMath::Square((_A - _B).Size() + (_B - _C).Size() + (_C - _A).Size()))
 		{}
 
 		~Tri() {
@@ -38,6 +41,9 @@ namespace Geometry {
 		const FVector& C;
 		const FVector Normal;
 		Tri* Edges[3]; // adjacent tris touching AB, BC, and CA in that order
+		// for faster intersection checking
+		const FVector Center;
+		const float SqPerimeter; 
 	};
 
 	// For storing world bounding box vertices of UBoxComponents and AStaticMeshActors' Meshes.

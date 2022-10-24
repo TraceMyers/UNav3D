@@ -57,6 +57,16 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
 ) {
 	TArray<TArray<Geometry::TriMesh*>> IntersectGroups;
 	GetIntersectGroups(IntersectGroups, InMeshes);
+
+	for (int i = 0; i < IntersectGroups.Num(); i++) {
+		printf("group {%d}:\n", i + 1);
+		auto& IntersectGroup = IntersectGroups[i];
+		for (int j = 0; j < IntersectGroup.Num(); j++) {
+			const auto TMesh = IntersectGroup[j];
+			printf("TMesh: %s\n", TCHAR_TO_ANSI(*TMesh->MeshActor->GetName()));
+		}
+		putchar('\n');
+	}
 	
 	// TODO: re-implement mesh stitching here
 	
@@ -167,7 +177,7 @@ void GeometryProcessor::GetIntersectGroups(
 		int GrpIndex = GroupIndices[i];
 		if (GrpIndex == -1) {
 			GrpIndex = Groups.Add(TArray<Geometry::TriMesh*>());
-			Groups[GrpIndex].Add(&TMeshA);	
+			GroupIndices[i] = GrpIndex;
 		}
 		
 		// check forward for bbox overlaps
@@ -191,7 +201,6 @@ void GeometryProcessor::GetIntersectGroups(
 				// merge groups if overlapping TMesh belongs to a different group (already checked if in same group)
 				if (OverlapGrpIndex == -1) {
 					GroupIndices[IndexOfOverlap] = GrpIndex;
-					
 				}
 				else {
 					for (int m = 0; m < InMeshCt; m++) {

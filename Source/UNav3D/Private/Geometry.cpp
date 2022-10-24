@@ -121,7 +121,7 @@ namespace Geometry {
 			Internal_GetLineSegmentIntersectionsOneWay(World, MeshActors, Params, B, A);
 		}
 		
-		// Get poi between an edge and another triangle. returns false when no intersection
+		// Get poi between a ray and another triangle. returns false when no intersection
 		// https://stackoverflow.com/questions/42740765/intersection-between-line-and-triangle-in-3d
 		// Uses Cramer's Rule to solve a system of equations with as many unknowns as there are equations.
 		// Is uni-directional.
@@ -135,15 +135,15 @@ namespace Geometry {
 			const FVector E1 (T.B - T.A);
 			const FVector E2 (T.C - T.A);
 			const FVector ScaledTriNormal = FVector::CrossProduct(E1, E2);
-			const double Determinant = -FVector::DotProduct(Dir, ScaledTriNormal);
-			const double InvDeterminant = 1.0f / Determinant;
+			const float Determinant = -FVector::DotProduct(Dir, ScaledTriNormal);
+			const float InvDeterminant = 1.0f / Determinant;
 			const FVector AO (Origin - T.A);
 			const FVector DAO = FVector::CrossProduct(AO, Dir);
-			const double U = FVector::DotProduct(E2, DAO) * InvDeterminant;
-			const double V = -FVector::DotProduct(E1, DAO) * InvDeterminant;
-			const double W = FVector::DotProduct(AO, ScaledTriNormal) * InvDeterminant;
+			const float U = FVector::DotProduct(E2, DAO) * InvDeterminant;
+			const float V = -FVector::DotProduct(E1, DAO) * InvDeterminant;
+			const float W = FVector::DotProduct(AO, ScaledTriNormal) * InvDeterminant;
 			POI = Origin + W * Dir;
-			return Determinant >= 1e-6f && W >= 0.0f && U >= 0.0f && V >= 0.0f && (U + V) <= 1.0f && Length > W;	
+			return Determinant >= 1e-6f && W >= 0.0f && U >= 0.0f && V >= 0.0f && (U + V) <= 1.0f && Length >= W;	
 		}
 
 		bool Internal_DoesLineSegmentIntersectTri(const FVector& LSA, const FVector& LSB, const Tri& T) {
@@ -162,6 +162,7 @@ namespace Geometry {
 			return false;
 		}
 
+		// TODO: test
 		bool Internal_DoTriMeshesIntersect(const TriMesh& TMeshA, const TriMesh& TMeshB) {
 			const TArray<Tri>& TMeshATris = TMeshA.Tris;
 			const TArray<Tri>& TMeshBTris = TMeshB.Tris;
@@ -169,11 +170,19 @@ namespace Geometry {
 			for (int i = 0; i < TMeshATris.Num(); i++) {
 				const Tri& T0 = TMeshATris[i];
 				for (int j = 0; j < TMeshBTriCt; j++) {
-				const Tri& T1 = TMeshATris[i];
+					const Tri& T1 = TMeshBTris[j];
+					const float SqDist = FVector::DistSquared(T0.Center, T1.Center);
 					if (
-						Internal_DoesLineSegmentIntersectTri(T0.A, T0.B, T1)
-						|| Internal_DoesLineSegmentIntersectTri(T0.B, T0.C, T1)
-						|| Internal_DoesLineSegmentIntersectTri(T0.C, T0.A, T1)
+						// (SqDist < T0.SqPerimeter || SqDist < T1.SqPerimeter)
+						true
+						&& (
+							Internal_DoesLineSegmentIntersectTri(T0.A, T0.B, T1)
+							|| Internal_DoesLineSegmentIntersectTri(T0.B, T0.C, T1)
+							|| Internal_DoesLineSegmentIntersectTri(T0.C, T0.A, T1)
+							|| Internal_DoesLineSegmentIntersectTri(T1.A, T1.B, T0)
+							|| Internal_DoesLineSegmentIntersectTri(T1.B, T1.C, T0)
+							|| Internal_DoesLineSegmentIntersectTri(T1.C, T1.A, T0)
+						)
 					) {
 						return true;
 					}
@@ -217,16 +226,16 @@ void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor) {
 		TArray<int>& IntersectIndices,
 		const TArray<int>& PotentialIntersectIndices,
 		const TriMesh& TMesh,
-		const TArray<TriMesh>& OtherTMeshes
+		const TArray<TriMesh>& GroupTMeshes
 	) {
 		const int PotentialIntersectCt = PotentialIntersectIndices.Num();
 		int IntersectionCt = 0;
 		for (int i = 0; i < PotentialIntersectCt; i++) {
-			const int& PotentialOverlapIndex = PotentialIntersectIndices[i];
-			const TriMesh& OtherTMesh = OtherTMeshes[PotentialOverlapIndex];
+			const int& PotentialIntersectIndex = PotentialIntersectIndices[i];
+			const TriMesh& OtherTMesh = GroupTMeshes[PotentialIntersectIndex];
 			if (Internal_DoTriMeshesIntersect(TMesh, OtherTMesh)) {
-				IntersectIndices.Add(i);
-				if (IntersectionCt++ == PotentialIntersectCt) {
+				IntersectIndices.Add(PotentialIntersectIndex);
+				if (++IntersectionCt == PotentialIntersectCt) {
 					return true;
 				}
 			}

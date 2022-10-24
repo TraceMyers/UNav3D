@@ -43,6 +43,9 @@
 		DrawDebugCircle(World, TMesh.Vertices[j], 2.0f, 3, FColor::Blue, false, DBG_DRAW_TIME); \
 	}
 
+// #define DRAW_ARROW(World, Start, End) \
+// 	DrawDebugArrow(World, Start, End, 5.0f, FColor::Green, false, 10.0f, 
+
 #else
 
 #define PRINT_TRIMESH_VERTEX_CT(TMesh)
