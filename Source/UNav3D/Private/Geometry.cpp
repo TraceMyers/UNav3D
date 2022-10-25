@@ -17,12 +17,23 @@ namespace Geometry {
 			FVector(-1.0f,  1.0f,  1.0f), // neighbors 2, 3, 7
 			FVector( 1.0f,  1.0f,  1.0f)
 		};
+		
+		constexpr int BBoxFaceIndices[RECT_PRISM_FACES][3] {
+			{0, 1, 2}, {0, 1, 3},{0, 2, 3},
+			{7, 4, 5}, {7, 5, 6},{7, 4, 6}
+		};
 
+		constexpr int BBoxEdgeIndices[RECT_PRISM_EDGES][2] {
+			{0, 1},{0, 2},{1, 4},{2, 4},
+			{3, 5}, {3, 6}, {7, 5}, {7, 6},
+			{1, 5}, {4, 7}, {2, 6}, {0, 3}
+		};
+		
 		// populate BBox with vertices and precomputed overlap-checking values
 		void Internal_SetBoundingBox(
 			BoundingBox& BBox,
 			const FVector& Extent,
-			const FTransform TForm,
+			const FTransform& TForm, 
 			const FVector& Center,
 			bool IsStaticMesh
 		) {
@@ -36,6 +47,13 @@ namespace Geometry {
 				for (int i = 0; i < RECT_PRISM_PTS; i++) {
 					BBox.Vertices[i] = TForm.TransformPositionNoScale(BaseExtent[i] * Extent);
 				}
+			}
+			for (int i = 0; i < RECT_PRISM_FACES; i++) {
+				const int* SideFaceIndices = BBoxFaceIndices[i];
+				const FVector& VertA = BBox.Vertices[SideFaceIndices[0]];
+				const FVector& VertB = BBox.Vertices[SideFaceIndices[1]];
+				const FVector& VertC = BBox.Vertices[SideFaceIndices[2]];
+				BBox.FaceNormals[i] = FVector::CrossProduct(VertB - VertA, VertC - VertA).GetUnsafeNormal();
 			}
 			const FVector& RefPoint = BBox.Vertices[0];
 			for (int i = 0; i < 3; i++) {
@@ -73,59 +91,61 @@ namespace Geometry {
 			}
 			return true;
 		}
-
-		// Sometimes BBoxes will overlap without either having points in the other, but this can be checked with
-		// a line test
-		bool Internal_DoesLineSegmentIntersectBox(const BoundingBox& Box, const FVector& PointA, const FVector& PointB) {
-			return false;
-		}
-
-		void Internal_GetLineSegmentIntersectionsOneWay(
-			const UWorld* World,
-			TArray<AStaticMeshActor*>& MeshActors,
-			FCollisionQueryParams& Params,
-			const FVector& A, 
-			const FVector& B
-		) {
-			TArray<FHitResult> OutHits;
-			// TODO: currently dependent on a trace channel set in this project; there are methods to add one to the...
-			// TODO: ... project via this plugin
-			World->LineTraceMultiByChannel(
-				OutHits,
-				A,
-				B,
-				ECollisionChannel::ECC_GameTraceChannel1,
-				Params
-			);
-			for (int i = 0; i < OutHits.Num(); i++) {
-				FHitResult& HitResult = OutHits[i];
-				AActor* Actor = HitResult.GetActor();
-				if (Actor != nullptr) {
-					AStaticMeshActor* MeshActor = Cast<AStaticMeshActor>(Actor);
-					if (MeshActor && MeshActors.Find(MeshActor) == -1) {
-						MeshActors.Add(MeshActor);
-					}
-				}
-			}
-		}
-
-		// Get all static mesh actors intersections along A -> B and B -> A
-		void Internal_GetLineSegmentIntersections(
-			const UWorld* World,
-			TArray<AStaticMeshActor*>& MeshActors, 
-			FCollisionQueryParams& Params,
-			const FVector& A, 
-			const FVector& B
-		) {
-			Internal_GetLineSegmentIntersectionsOneWay(World, MeshActors, Params, A, B);
-			Internal_GetLineSegmentIntersectionsOneWay(World, MeshActors, Params, B, A);
-		}
 		
-		// Get poi between a ray and another triangle. returns false when no intersection
-		// https://stackoverflow.com/questions/42740765/intersection-between-line-and-triangle-in-3d
-		// Uses Cramer's Rule to solve a system of equations with as many unknowns as there are equations.
-		// Is uni-directional.
-		// TODO: test is two-directional?
+		bool Internal_DoesPointTouchTri(const Tri& T, const FVector& P) {
+			return (
+				Tri::GetArea(P, T.A, T.B) + Tri::GetArea(P, T.B, T.C) + Tri::GetArea(P, T.C, T.A)
+				<= T.Area + NEAR_EPSILON
+			);
+		}
+
+		// assumes pt has been projected onto plane with vertices
+		bool Internal_DoesPointTouchFace(
+			const FVector& VertA,
+			const FVector& VertB,
+			const FVector& VertC,
+			const FVector& Pt
+		) {
+			const FVector FaceEdgeB = VertB - VertA;	
+			const FVector FaceEdgeC = VertC - VertA;
+			const FVector PtVec = Pt - VertA;
+			const float LenFEB = FaceEdgeB.Size();
+			const float LenFEC = FaceEdgeC.Size();
+			const float LenPVC = PtVec.Size();
+			const float CosTheta = FVector::DotProduct(PtVec, FaceEdgeB) / (LenPVC * LenFEB);
+			const float CosPhi = FVector::DotProduct(PtVec, FaceEdgeC) / (LenPVC * LenFEC);
+			return (CosTheta >= 0) && (CosPhi >= 0) && (LenPVC * CosTheta <= LenFEB) && (LenPVC * CosPhi <= LenFEC);
+		}
+
+		bool Internal_Raycast(
+			const FVector& Origin,
+			const FVector& Dir,
+			float Length,
+			const FVector& PlanePtA,
+			const FVector& PlanePtB,
+			const FVector& PlanePtC,
+			const FVector& Normal, // could get here, but currently precomputed for BoundingBox
+			FVector& POI
+		) {
+			const FVector PVec = Origin - PlanePtA;
+			if (FVector::DotProduct(PVec, Normal) <= 0.0f) {
+				return false;
+			}
+			const float RayNormCosTheta = FVector::DotProduct(Dir, -Normal);
+			if (RayNormCosTheta <= 0.0f) {
+				return false;
+			}
+			const float LenOProj = FVector::DotProduct(Normal, PVec);
+			const float RayHitDist = LenOProj / RayNormCosTheta;
+			if (RayHitDist > Length) {
+				return false;
+			}
+			POI = Origin + Dir * RayHitDist;
+			return Internal_DoesPointTouchFace(PlanePtA, PlanePtB, PlanePtC, POI);
+		}
+
+		// thinks in triangles: the one made by the tri plane, origin -> center, origin -> projection
+		// and the one made by the tri plane, origin -> projection, origin -> ray hit. Could be faster, I'm sure.
 		bool Internal_Raycast(
 			const FVector& Origin,
 			const FVector& Dir,
@@ -133,23 +153,49 @@ namespace Geometry {
 			const Tri& T,
 			FVector& POI
 		) {
-			const FVector E1 (T.B - T.A);
-			const FVector E2 (T.C - T.A);
-			const FVector ScaledTriNormal = FVector::CrossProduct(E1, E2);
-			const float Determinant = -FVector::DotProduct(Dir, ScaledTriNormal);
-			const float InvDeterminant = 1.0f / Determinant;
-			const FVector AO (Origin - T.A);
-			const FVector DAO = FVector::CrossProduct(AO, Dir);
-			const float U = FVector::DotProduct(E2, DAO) * InvDeterminant;
-			const float V = -FVector::DotProduct(E1, DAO) * InvDeterminant;
-			const float W = FVector::DotProduct(AO, ScaledTriNormal) * InvDeterminant;
-			POI = Origin + W * Dir;
-			return Determinant >= 1e-6f && W >= 0.0f && U >= 0.0f && V >= 0.0f && (U + V) <= 1.0f && Length >= W;	
+			const FVector PVec = Origin - T.Center;
+			if (FVector::DotProduct(PVec, T.Normal) <= 0.0f) {
+				return false;
+			}
+			const float RayNormCosTheta = FVector::DotProduct(Dir, -T.Normal);
+			if (RayNormCosTheta <= 0.0f) {
+				return false;
+			}
+			const float LenOProj = FVector::DotProduct(T.Normal, PVec);
+			const float RayHitDist = LenOProj / RayNormCosTheta;
+			if (RayHitDist > Length) {
+				return false;
+			}
+			POI = Origin + Dir * RayHitDist;
+			return Internal_DoesPointTouchTri(T, POI);
+		}
+		
+		bool Internal_DoesLineSegmentIntersectBox(const FVector& LSA, const FVector& LSB, const BoundingBox& BBox) {
+			FVector PointOfIntersection;
+			FVector Dir = LSB - LSA;
+			const float Length = Dir.Size();
+			Dir *= 1.0f / Length;
+			const FVector* Origin = &LSA;
+			for (int i = 0; i < 2; i++) {
+				for (int j = 0; j < RECT_PRISM_FACES; j++) {
+					const int* FaceIndices = BBoxFaceIndices[j];
+					const FVector& FaceA = BBox.Vertices[FaceIndices[0]];
+					const FVector& FaceB = BBox.Vertices[FaceIndices[1]];
+					const FVector& FaceC = BBox.Vertices[FaceIndices[2]];
+					if (Internal_Raycast(
+						*Origin, Dir, Length, FaceA, FaceB, FaceC, BBox.FaceNormals[j], PointOfIntersection
+					)) {
+						return true;
+					}
+				}
+				Dir = -Dir;
+				Origin = &LSB;
+			}
+			return false;
 		}
 
 		bool Internal_DoesLineSegmentIntersectTri(const FVector& LSA, const FVector& LSB, const Tri& T) {
 			FVector PointOfIntersection;
-			
 			FVector Dir = LSB - LSA;
 			const float Length = Dir.Size();
 			Dir *= 1.0f / Length;
@@ -163,7 +209,26 @@ namespace Geometry {
 			return false;
 		}
 
-		// TODO: test
+		bool Internal_DoBoundingBoxesIntersect(const BoundingBox& BBoxA, const BoundingBox& BBoxB) {
+			const BoundingBox* EdgesBoxPtr = &BBoxA;
+			const BoundingBox* FacesBoxPtr = &BBoxB;
+			for (int i = 0; i < 2; i++) {
+				const BoundingBox& EdgesBox = *EdgesBoxPtr;
+				const BoundingBox& FacesBox = *FacesBoxPtr;
+				for (int j = 0; j < RECT_PRISM_EDGES; j++) {
+					const int* EdgeIndices = BBoxEdgeIndices[j];
+					const FVector EdgeA = EdgesBox.Vertices[EdgeIndices[0]];
+					const FVector EdgeB = EdgesBox.Vertices[EdgeIndices[1]];
+					if (Internal_DoesLineSegmentIntersectBox(EdgeA, EdgeB, FacesBox)) {
+						return true;
+					}	
+				}
+				EdgesBoxPtr = &BBoxB;
+				FacesBoxPtr = &BBoxA;
+			}
+			return false;
+		}
+
 		bool Internal_DoTriMeshesIntersect(const TriMesh& TMeshA, const TriMesh& TMeshB) {
 			const TArray<Tri>& TMeshATris = TMeshA.Tris;
 			const TArray<Tri>& TMeshBTris = TMeshB.Tris;
@@ -175,7 +240,7 @@ namespace Geometry {
 					const float SqDist = FVector::DistSquared(T0.Center, T1.Center);
 					if (
 						// (SqDist < T0.SqPerimeter || SqDist < T1.SqPerimeter)
-						true
+					true
 						&& (
 							Internal_DoesLineSegmentIntersectTri(T0.A, T0.B, T1)
 							|| Internal_DoesLineSegmentIntersectTri(T0.B, T0.C, T1)
@@ -192,35 +257,7 @@ namespace Geometry {
 			return false;
 		}
 	}
-
-	bool DoTriMeshesIntersect(UWorld* World, const TriMesh& TMeshA, const TriMesh& TMeshB) {
-		const TArray<Tri>& TMeshATris = TMeshA.Tris;
-		const TArray<Tri>& TMeshBTris = TMeshB.Tris;
-		const int TMeshBTriCt = TMeshBTris.Num();
-		for (int i = 0; i < TMeshATris.Num(); i++) {
-			const Tri& T0 = TMeshATris[i];
-			for (int j = 0; j < TMeshBTriCt; j++) {
-				const Tri& T1 = TMeshBTris[j];
-				const float SqDist = FVector::DistSquared(T0.Center, T1.Center);
-				if (
-					// (SqDist < T0.SqPerimeter || SqDist < T1.SqPerimeter)
-					true
-					&& (
-						Internal_DoesLineSegmentIntersectTri(T0.A, T0.B, T1)
-						|| Internal_DoesLineSegmentIntersectTri(T0.B, T0.C, T1)
-						|| Internal_DoesLineSegmentIntersectTri(T0.C, T0.A, T1)
-						|| Internal_DoesLineSegmentIntersectTri(T1.A, T1.B, T0)
-						|| Internal_DoesLineSegmentIntersectTri(T1.B, T1.C, T0)
-						|| Internal_DoesLineSegmentIntersectTri(T1.C, T1.A, T0)
-					)
-				) {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
+	
 	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor) {
 		const FBox MeshFBox = MeshActor->GetStaticMeshComponent()->GetStaticMesh()->GetBoundingBox();
 		const FVector Extent = MeshFBox.GetExtent();
@@ -246,12 +283,11 @@ namespace Geometry {
 				return true;
 			}
 		}
-		// TODO: check edge-face intersections, too
-		return false;
+		return Internal_DoBoundingBoxesIntersect(BBoxA, BBoxB);
 	}
 
-	// Tests along all tri edges for intersections. 
-	bool GetTriMeshIntersections(
+	// Tests along all tri edges for intersections, but only those with indices in PotentialIntersectionIndices
+	bool GetTriMeshIntersectGroups(
 		TArray<int>& IntersectIndices,
 		const TArray<int>& PotentialIntersectIndices,
 		const TriMesh& TMesh,

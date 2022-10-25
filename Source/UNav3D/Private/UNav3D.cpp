@@ -144,7 +144,7 @@ bool FUNav3DModule::PopulateTriMeshes(
 	}
 	ProgressTask.EnterProgressFrame();
 
-	// DRAW_TRIMESH_BOUNDING_BOXES(World, TMeshes)
+	DRAW_TRIMESH_BOUNDING_BOXES(World, TMeshes)
 
 	// getting geometry data and populating the TriMeshes with it
 	for (int i = 0; i < TMeshes.Num(); i++) {
@@ -158,8 +158,8 @@ bool FUNav3DModule::PopulateTriMeshes(
 		const Geometry::TriMesh& TMesh = TMeshes[i];
 		PRINT_GEOPROC_NEGATIVE_RESPONSE(TMesh, Response)
 		PRINT_TRIMESH_VERTEX_CT(TMesh)
-		// DRAW_TRIMESH_VERTICES(World, TMesh);
-		DRAW_TRIMESH_TRIS(World, TMesh)
+		DRAW_TRIMESH_VERTICES(World, TMesh);
+		// DRAW_TRIMESH_TRIS(World, TMesh)
 	}
 	ProgressTask.EnterProgressFrame();
 	

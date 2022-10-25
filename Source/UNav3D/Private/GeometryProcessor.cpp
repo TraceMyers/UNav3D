@@ -194,7 +194,7 @@ void GeometryProcessor::GetIntersectGroups(
 		}
 
 		// populate group indices array with indices of mesh intersections
-		if(Geometry::GetTriMeshIntersections(IntersectIndices, PotentialIntersectIndices, TMeshA, InMeshes)) {
+		if(Geometry::GetTriMeshIntersectGroups(IntersectIndices, PotentialIntersectIndices, TMeshA, InMeshes)) {
 			for (int j = 0; j < IntersectIndices.Num(); j++) {
 				const int& IndexOfOverlap = IntersectIndices[j];
 				const int OverlapGrpIndex = GroupIndices[IndexOfOverlap];

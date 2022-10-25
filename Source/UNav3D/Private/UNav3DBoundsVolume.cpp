@@ -21,6 +21,7 @@ AUNav3DBoundsVolume::AUNav3DBoundsVolume() {
 
 void AUNav3DBoundsVolume::BeginPlay() {
 	Super::BeginPlay();
+	Destroy();
 }
 
 void AUNav3DBoundsVolume::Tick(float DeltaTime) {

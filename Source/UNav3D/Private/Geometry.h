@@ -8,7 +8,10 @@ class UBoxComponent;
 namespace Geometry {
 
 	static constexpr int RECT_PRISM_PTS = 8;
+	static constexpr int RECT_PRISM_FACES = 6;
+	static constexpr int RECT_PRISM_EDGES = 12;
 	static constexpr float ONE_THIRD = 1.0f / 3.0f;
+	static constexpr float NEAR_EPSILON = 1e-4f;
 	
 	// Triangle; saves space by storing references to vertices on the TriMesh; stores references to adjacent Tris
 	// Edges must be re-pointed if Tri's container reallocates
@@ -19,7 +22,8 @@ namespace Geometry {
 			Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
 			Edges{nullptr},
 			Center((_A + _B + _C) * ONE_THIRD),
-			SqPerimeter(FMath::Square((_A - _B).Size() + (_B - _C).Size() + (_C - _A).Size()))
+			SqPerimeter(FMath::Square((_A - _B).Size() + (_B - _C).Size() + (_C - _A).Size())),
+			Area(GetArea(_A, _B, _C))
 		{}
 
 		~Tri() {
@@ -35,7 +39,15 @@ namespace Geometry {
 				}
 			}		
 		}
+
+		static float GetArea(const FVector& A, const FVector& B, const FVector& C) {
+			return FVector::CrossProduct(A - B, A - C).Size() * 0.5f;
+		}
 		
+		static float GetArea(const Tri& T) {
+			return FVector::CrossProduct(T.A - T.B, T.A - T.C).Size() * 0.5f;
+		}
+
 		const FVector& A;
 		const FVector& B;
 		const FVector& C;
@@ -43,7 +55,8 @@ namespace Geometry {
 		Tri* Edges[3]; // adjacent tris touching AB, BC, and CA in that order
 		// for faster intersection checking
 		const FVector Center;
-		const float SqPerimeter; 
+		const float SqPerimeter;
+		const float Area;
 	};
 
 	// For storing world bounding box vertices of UBoxComponents and AStaticMeshActors' Meshes.
@@ -54,7 +67,8 @@ namespace Geometry {
 	// bounding boxes that rotate with meshes are much smaller, thus giving less false positives.
 	struct BoundingBox {
 		FVector Vertices[RECT_PRISM_PTS];
-		// -- precomputed data for overlap checking using Vertices --
+		// -- for overlap checking --
+		FVector FaceNormals[RECT_PRISM_FACES];
 		FVector OverlapCheckVectors[3];
 		float OverlapCheckSqMags[3];
 	};
@@ -125,13 +139,11 @@ namespace Geometry {
 
 	// Checks whether two meshes overlap. May give false negatives due to imprecision of line trace checking; true if
 	// any overlaps
-	bool GetTriMeshIntersections (
+	bool GetTriMeshIntersectGroups (
 		TArray<int>& OverlapIndices,
 		const TArray<int>& PotentialOverlapIndices,
 		const TriMesh& TMesh,
 		const TArray<TriMesh>& Meshes
 	);
-	
-	bool DoTriMeshesIntersect(UWorld* World, const TriMesh& TMeshA, const TriMesh& TMeshB);
 	
 }
