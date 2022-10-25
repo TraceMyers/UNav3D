@@ -125,6 +125,7 @@ namespace Geometry {
 		// https://stackoverflow.com/questions/42740765/intersection-between-line-and-triangle-in-3d
 		// Uses Cramer's Rule to solve a system of equations with as many unknowns as there are equations.
 		// Is uni-directional.
+		// TODO: test is two-directional?
 		bool Internal_Raycast(
 			const FVector& Origin,
 			const FVector& Dir,
@@ -192,7 +193,35 @@ namespace Geometry {
 		}
 	}
 
-void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor) {
+	bool DoTriMeshesIntersect(UWorld* World, const TriMesh& TMeshA, const TriMesh& TMeshB) {
+		const TArray<Tri>& TMeshATris = TMeshA.Tris;
+		const TArray<Tri>& TMeshBTris = TMeshB.Tris;
+		const int TMeshBTriCt = TMeshBTris.Num();
+		for (int i = 0; i < TMeshATris.Num(); i++) {
+			const Tri& T0 = TMeshATris[i];
+			for (int j = 0; j < TMeshBTriCt; j++) {
+				const Tri& T1 = TMeshBTris[j];
+				const float SqDist = FVector::DistSquared(T0.Center, T1.Center);
+				if (
+					// (SqDist < T0.SqPerimeter || SqDist < T1.SqPerimeter)
+					true
+					&& (
+						Internal_DoesLineSegmentIntersectTri(T0.A, T0.B, T1)
+						|| Internal_DoesLineSegmentIntersectTri(T0.B, T0.C, T1)
+						|| Internal_DoesLineSegmentIntersectTri(T0.C, T0.A, T1)
+						|| Internal_DoesLineSegmentIntersectTri(T1.A, T1.B, T0)
+						|| Internal_DoesLineSegmentIntersectTri(T1.B, T1.C, T0)
+						|| Internal_DoesLineSegmentIntersectTri(T1.C, T1.A, T0)
+					)
+				) {
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor) {
 		const FBox MeshFBox = MeshActor->GetStaticMeshComponent()->GetStaticMesh()->GetBoundingBox();
 		const FVector Extent = MeshFBox.GetExtent();
 		const FVector Center = MeshFBox.GetCenter();

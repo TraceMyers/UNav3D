@@ -132,4 +132,6 @@ namespace Geometry {
 		const TArray<TriMesh>& Meshes
 	);
 	
+	bool DoTriMeshesIntersect(UWorld* World, const TriMesh& TMeshA, const TriMesh& TMeshB);
+	
 }

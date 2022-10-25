@@ -144,7 +144,7 @@ bool FUNav3DModule::PopulateTriMeshes(
 	}
 	ProgressTask.EnterProgressFrame();
 
-	DRAW_TRIMESH_BOUNDING_BOXES(World, TMeshes)
+	// DRAW_TRIMESH_BOUNDING_BOXES(World, TMeshes)
 
 	// getting geometry data and populating the TriMeshes with it
 	for (int i = 0; i < TMeshes.Num(); i++) {
@@ -155,9 +155,11 @@ bool FUNav3DModule::PopulateTriMeshes(
 		else if (Response == GeometryProcessor::GEOPROC_ALLOC_FAIL) {
 			UNAV_GENERR("The Geometry Processor failed to allocate enough space for a mesh.")
 		}
-		PRINT_GEOPROC_NEGATIVE_RESPONSE(TMeshes[i], Response);
-		PRINT_TRIMESH_VERTEX_CT(TMeshes[i])
-		DRAW_TRIMESH_VERTICES(World, TMeshes[i]);
+		const Geometry::TriMesh& TMesh = TMeshes[i];
+		PRINT_GEOPROC_NEGATIVE_RESPONSE(TMesh, Response)
+		PRINT_TRIMESH_VERTEX_CT(TMesh)
+		// DRAW_TRIMESH_VERTICES(World, TMesh);
+		DRAW_TRIMESH_TRIS(World, TMesh)
 	}
 	ProgressTask.EnterProgressFrame();
 	

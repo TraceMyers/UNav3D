@@ -146,7 +146,7 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
 
 	// Vertices[Indices[0]] = Tri0.A, Vertices[Indices[1]] = Tri0.B, Vertices[Indices[2]] = Tri0.C,
 	// Vertices[Indices[3]] = Tri1.A ... and so on
-	const uint32 VEnd = VertexCt - 3;
+	const uint32 VEnd = IndexCt - 3;
 	const FVector* Vertices = TMesh.Vertices;
 	for (uint16* IndexPtr = Indices; (IndexPtr - Indices) <= VEnd; ) {
 		const FVector& A = Vertices[*IndexPtr++];

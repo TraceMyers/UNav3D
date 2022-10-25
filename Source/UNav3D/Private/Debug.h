@@ -43,8 +43,14 @@
 		DrawDebugCircle(World, TMesh.Vertices[j], 2.0f, 3, FColor::Blue, false, DBG_DRAW_TIME); \
 	}
 
-// #define DRAW_ARROW(World, Start, End) \
-// 	DrawDebugArrow(World, Start, End, 5.0f, FColor::Green, false, 10.0f, 
+#define DRAW_TRIMESH_TRIS(World, TMesh) \
+	const auto& Tris = TMesh.Tris; \
+	for (int j = 0; j < Tris.Num(); j++) { \
+		const auto& Tri = Tris[j]; \
+		DrawDebugLine(World, Tri.A, Tri.B, FColor::Green, false, DBG_DRAW_TIME, 0, 2.0f); \
+		DrawDebugLine(World, Tri.B, Tri.C, FColor::Green, false, DBG_DRAW_TIME, 0, 2.0f); \
+		DrawDebugLine(World, Tri.C, Tri.A, FColor::Green, false, DBG_DRAW_TIME, 0, 2.0f); \
+	}
 
 #else
 
