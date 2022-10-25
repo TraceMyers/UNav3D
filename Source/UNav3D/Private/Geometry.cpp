@@ -237,9 +237,10 @@ namespace Geometry {
 				const Tri& T0 = TMeshATris[i];
 				for (int j = 0; j < TMeshBTriCt; j++) {
 					const Tri& T1 = TMeshBTris[j];
-					const float SqDist = FVector::DistSquared(T0.Center, T1.Center);
+					// checking if it's possible they could intersect
+					const float Dist = FVector::Dist(T0.Center, T1.Center);
 					if (
-						(SqDist < T0.SqPerimeter || SqDist < T1.SqPerimeter)
+						(Dist < T0.LongestSidelen + T1.LongestSidelen)
 						&& (
 							Internal_DoesLineSegmentIntersectTri(T0.A, T0.B, T1)
 							|| Internal_DoesLineSegmentIntersectTri(T0.B, T0.C, T1)

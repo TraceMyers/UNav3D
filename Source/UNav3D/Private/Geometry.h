@@ -22,7 +22,7 @@ namespace Geometry {
 			Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
 			Edges{nullptr},
 			Center((_A + _B + _C) * ONE_THIRD),
-			SqPerimeter(FMath::Square((_A - _B).Size() + (_B - _C).Size() + (_C - _A).Size())),
+			LongestSidelen(GetLongestSidelen(_A, _B, _C)),
 			Area(GetArea(_A, _B, _C))
 		{}
 
@@ -48,6 +48,22 @@ namespace Geometry {
 			return FVector::CrossProduct(T.A - T.B, T.A - T.C).Size() * 0.5f;
 		}
 
+		static float GetLongestSidelen(const FVector& A, const FVector& B, const FVector& C) {
+			const float AB = (A - B).Size();
+			const float BC = (B - C).Size();
+			const float CA = (C - A).Size();
+			if (AB > BC) {
+				if (AB > CA) {
+					return AB;
+				}
+				return CA;
+			}
+			if (BC > CA) {
+				return BC;
+			}
+			return CA;
+		}
+
 		const FVector& A;
 		const FVector& B;
 		const FVector& C;
@@ -55,7 +71,7 @@ namespace Geometry {
 		Tri* Edges[3]; // adjacent tris touching AB, BC, and CA in that order
 		// for faster intersection checking
 		const FVector Center;
-		const float SqPerimeter;
+		const float LongestSidelen;
 		const float Area;
 	};
 

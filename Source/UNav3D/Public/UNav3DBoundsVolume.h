@@ -32,6 +32,7 @@ public:
 	UStaticMeshComponent* BoundsMesh;
 	UPROPERTY(BlueprintReadWrite, VisibleDefaultsOnly)
 	UBoxComponent* BoundsBox;
+	
 
 protected:
 
