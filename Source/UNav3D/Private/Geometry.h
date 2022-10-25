@@ -155,11 +155,28 @@ namespace Geometry {
 
 	// Checks whether two meshes overlap. May give false negatives due to imprecision of line trace checking; true if
 	// any overlaps
-	bool GetTriMeshIntersectGroups (
+	bool GetTriMeshIntersectGroups(
 		TArray<int>& OverlapIndices,
 		const TArray<int>& PotentialOverlapIndices,
 		const TriMesh& TMesh,
-		const TArray<TriMesh>& Meshes
+		const TArray<TriMesh>& TMeshes
 	);
-	
+
+	// Gets the extrema of world axis-aligned Bounding Box of a group of TMeshes
+	void GetGroupExtrema(TArray<TriMesh*> TMeshes, FVector& Min, FVector& Max, bool NudgeOutward=false);
+
+	// populates Obscured with tris in TMesh that are fully inside any other meshes in OtherTMeshes
+	// populates Intersecting with tris in TMesh and are partially obscured
+	// populates OtherIntersecting with tris in OtherTMeshes 
+	// void GetObscuredAndIntersectingTris(
+	// 	TArray<Tri&> Obscured,
+	// 	TArray<Tri&> Intersecting,
+	// 	TArray<TArray<Tri&>> OtherIntersecting,
+	// 	const TriMesh& TMesh,
+	// 	const TArray<TriMesh*>& OtherTMeshes
+	// );
+	// NOTE: breaking this up with these ideas:
+	// - enclosed: tri is fully enclosed by one mesh or a combination of meshes in its group
+	// - obscured: tri is partially hidden by one mesh or a combination of meshes in its group
+	// - unobscured: tri is fully visible in the context of its group
 }

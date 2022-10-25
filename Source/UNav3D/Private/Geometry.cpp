@@ -19,12 +19,12 @@ namespace Geometry {
 		};
 		
 		constexpr int BBoxFaceIndices[RECT_PRISM_FACES][3] {
-			{0, 1, 2}, {0, 1, 3},{0, 2, 3},
-			{7, 4, 5}, {7, 5, 6},{7, 4, 6}
+			{0, 1, 2}, {0, 1, 3}, {0, 2, 3},
+			{7, 4, 5}, {7, 5, 6}, {7, 4, 6}
 		};
 
 		constexpr int BBoxEdgeIndices[RECT_PRISM_EDGES][2] {
-			{0, 1},{0, 2},{1, 4},{2, 4},
+			{0, 1}, {0, 2}, {1, 4}, {2, 4},
 			{3, 5}, {3, 6}, {7, 5}, {7, 6},
 			{1, 5}, {4, 7}, {2, 6}, {0, 3}
 		};
@@ -310,5 +310,44 @@ namespace Geometry {
 		}
 		return false;
 	}
+
+	void GetGroupExtrema(TArray<TriMesh*> TMeshes, FVector& Min, FVector& Max, bool NudgeOutward) {
+		const int TMeshCt = TMeshes.Num();
+		if (TMeshCt == 0) {
+			return;
+		}
+		// allows using if/else in loop
+		Min = TMeshes[0]->Box.Vertices[0];
+		Max = TMeshes[0]->Box.Vertices[0];
+		for (int i = 0; i < TMeshCt; i++) {
+			const FVector* BoxVerts = TMeshes[i]->Box.Vertices;
+			for (int j = 0; j < RECT_PRISM_PTS; j++) {
+				const FVector& Vertex = BoxVerts[j];
+				if (Vertex.X < Min.X) {
+					Min.X = Vertex.X;
+				}
+				else if (Vertex.X > Max.X) {
+					Max.X = Vertex.X;
+				}
+				if (Vertex.Y < Min.Y) {
+					Min.Y = Vertex.Y;
+				}
+				else if (Vertex.Y > Max.Y) {
+					Max.Y = Vertex.Y;
+				}
+				if (Vertex.Z < Min.Z) {
+					Min.Z = Vertex.Z;
+				}
+				else if (Vertex.Z > Max.Z) {
+					Max.Z = Vertex.Z;
+				}
+			}
+		}
+		if (NudgeOutward) {
+			Max += FVector::OneVector;
+			Min -= FVector::OneVector;
+		}
+	}
+
 
 }

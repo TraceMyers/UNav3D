@@ -82,7 +82,7 @@ void FUNav3DModule::PluginButtonClicked(){
 	}
 
 	TArray<Geometry::TriMesh> ReformedTMeshes;
-	GeomProcessor.ReformTriMeshes(TMeshes, ReformedTMeshes);
+	GeomProcessor.ReformTriMeshes(World, TMeshes, ReformedTMeshes);
 }
 
 void FUNav3DModule::RegisterMenus() {

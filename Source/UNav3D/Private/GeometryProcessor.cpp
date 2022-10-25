@@ -52,11 +52,12 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(Geometry:
 
 // Does not group Mesh A and Mesh B if Mesh A is entirely inside MeshB, unless Mesh C intersects both
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
+	UWorld* World,
 	TArray<Geometry::TriMesh>& InMeshes,
 	TArray<Geometry::TriMesh>& OutMeshes
 ) {
 	TArray<TArray<Geometry::TriMesh*>> IntersectGroups;
-	GetIntersectGroups(IntersectGroups, InMeshes);
+	GetIntersectGroups(World, IntersectGroups, InMeshes);
 
 	for (int i = 0; i < IntersectGroups.Num(); i++) {
 		printf("group {%d}:\n", i + 1);
@@ -161,6 +162,7 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
 }
 
 void GeometryProcessor::GetIntersectGroups(
+	UWorld* World,
 	TArray<TArray<Geometry::TriMesh*>>& Groups,
 	TArray<Geometry::TriMesh>& InMeshes
 ) {
@@ -225,5 +227,23 @@ void GeometryProcessor::GetIntersectGroups(
 	for (int i = 0; i < InMeshCt; i++) {
 		const int& GrpIndex = GroupIndices[i];
 		Groups[GrpIndex].Add(&InMeshes[i]);
+	}
+}
+
+void GeometryProcessor::CullInnerTris(TArray<TArray<Geometry::TriMesh*>>& Groups) {
+	for (int i = 0; i < Groups.Num(); i++) {
+		TArray<Geometry::TriMesh*>& Group = Groups[i];
+		FVector GroupBBoxMin;
+		FVector GroupBBoxMax;
+		Geometry::GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
+		for (int j = 0; j < Group.Num(); j++) {
+			Geometry::TriMesh* CurTMesh = Group[j];
+			TArray<Geometry::Tri>& CurTris = CurTMesh->Tris;
+			TArray<Geometry::TriMesh*> OtherTMeshes = Group;
+			OtherTMeshes.Remove(CurTMesh);
+			for (int k = 0; k < CurTris.Num(); k++) {
+				const Geometry::Tri& T = CurTris[k];
+			}
+		}
 	}
 }

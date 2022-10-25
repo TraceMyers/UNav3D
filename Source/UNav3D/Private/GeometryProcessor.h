@@ -25,6 +25,7 @@ public:
 	// Takes Populated TriMeshes, groups them by overlap, and reforms the overlapped meshes into continuous meshes
 	// Populates OutMeshes, Empties InMeshes
 	GEOPROC_RESPONSE ReformTriMeshes(
+		UWorld* World,
 		TArray<Geometry::TriMesh>& InMeshes,
 		TArray<Geometry::TriMesh>& OutMeshes
 	);
@@ -47,9 +48,14 @@ private:
 
 	// Group Meshes together if they overlap
 	static void GetIntersectGroups(
+		UWorld* World,
 		TArray<TArray<Geometry::TriMesh*>>& Groups,
 		TArray<Geometry::TriMesh>& InMeshes
 	);
+
+	// Removes Tris that are obscured (inside other meshes in their group). Note: if Mesh A is fully enclosed by Mesh B
+	// without intersections linking them, they will be part of separate groups, so Mesh A tris will not be culled.
+	void CullInnerTris(TArray<TArray<Geometry::TriMesh*>>& Groups);
 	
 };
 
