@@ -109,8 +109,8 @@ namespace Geometry {
 			const FVector FaceEdgeB = VertB - VertA;	
 			const FVector FaceEdgeC = VertC - VertA;
 			const FVector PtVec = Pt - VertA;
-			const float LenFEB = FaceEdgeB.Size();
-			const float LenFEC = FaceEdgeC.Size();
+			const float LenFEB = FaceEdgeB.Size() + NEAR_EPSILON;
+			const float LenFEC = FaceEdgeC.Size() + NEAR_EPSILON;
 			const float LenPVC = PtVec.Size();
 			const float CosTheta = FVector::DotProduct(PtVec, FaceEdgeB) / (LenPVC * LenFEB);
 			const float CosPhi = FVector::DotProduct(PtVec, FaceEdgeC) / (LenPVC * LenFEC);
