@@ -68,10 +68,10 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
 		}
 		putchar('\n');
 	}
+
+	CullInnerTris(World, IntersectGroups);
 	
-	// TODO: re-implement mesh stitching here
-	
-	InMeshes.Empty();
+	// InMeshes.Empty();
 	return GEOPROC_SUCCESS;
 }
 
@@ -230,7 +230,7 @@ void GeometryProcessor::GetIntersectGroups(
 	}
 }
 
-void GeometryProcessor::CullInnerTris(TArray<TArray<Geometry::TriMesh*>>& Groups) {
+void GeometryProcessor::CullInnerTris(const UWorld* World, TArray<TArray<Geometry::TriMesh*>>& Groups) {
 	for (int i = 0; i < Groups.Num(); i++) {
 		TArray<Geometry::TriMesh*>& Group = Groups[i];
 		FVector GroupBBoxMin;
@@ -238,12 +238,9 @@ void GeometryProcessor::CullInnerTris(TArray<TArray<Geometry::TriMesh*>>& Groups
 		Geometry::GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
 		for (int j = 0; j < Group.Num(); j++) {
 			Geometry::TriMesh* CurTMesh = Group[j];
-			TArray<Geometry::Tri>& CurTris = CurTMesh->Tris;
 			TArray<Geometry::TriMesh*> OtherTMeshes = Group;
 			OtherTMeshes.Remove(CurTMesh);
-			for (int k = 0; k < CurTris.Num(); k++) {
-				const Geometry::Tri& T = CurTris[k];
-			}
+			Geometry::FlagObscuredTris(World, *CurTMesh, OtherTMeshes, GroupBBoxMin);
 		}
 	}
 }

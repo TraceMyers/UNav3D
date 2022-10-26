@@ -29,6 +29,11 @@ namespace Geometry {
 		// get the area of tri T
 		static float GetArea(const Tri& T);
 
+		// asking if these vertices are inside other meshes
+		bool IsAObscured() const;
+		bool IsBObscured() const;
+		bool IsCObscured() const;
+
 		const FVector& A;
 		const FVector& B;
 		const FVector& C;
@@ -81,12 +86,10 @@ namespace Geometry {
 	// Populates a BoundingBox from a UBoxComponent
 	void SetBoundingBox(BoundingBox& BBox, const UBoxComponent* BoxCmp);
 
-	// Checks whether or not the two bounding boxes overlap. Doing our own overlap checking in editor appears to be
-	// necessary, as UBoxComponents will not report overlaps with AStaticMeshActor until play starts
+	// Checks whether or not the two bounding boxes overlap. Seemingly necessary to do this on our own for editor plugin.
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB);
 
-	// Checks whether two meshes overlap. May give false negatives due to imprecision of line trace checking; true if
-	// any overlaps
+	// Checks whether two meshes overlap. May give false negatives due to imprecision of line trace checking
 	bool GetTriMeshIntersectGroups(
 		TArray<int>& OverlapIndices,
 		const TArray<int>& PotentialOverlapIndices,
@@ -97,17 +100,16 @@ namespace Geometry {
 	// Gets the extrema of world axis-aligned Bounding Box of a group of TMeshes
 	void GetGroupExtrema(TArray<TriMesh*> TMeshes, FVector& Min, FVector& Max, bool NudgeOutward=false);
 
-	// populates Obscured with (most) tris in TMesh that are fully or partly inside any other meshes in OtherTMeshes.
+	// Flags most obscured tris in TMesh that are fully or partly inside any other meshes in OtherTMeshes.
 	// if any vertices are inside other meshes, that tri is definitely 'obscured'. Some tris will be obscured
 	// even if they aren't caught here, since all of their vertices may be visible but they're intersected in the middle.
-	void GetObscuredTris(
-		UWorld* World,
-		TArray<Tri*> Obscured,
-		const TriMesh& TMesh,
+	void FlagObscuredTris(
+		const UWorld* World,
+		TriMesh& TMesh,
 		const TArray<TriMesh*>& OtherTMeshes,
-		const FVector& GroupExtMin,
-		const FVector& GroupExtMax
+		const FVector& GroupExtMin // group bounding box extrema min
 	);
+	
 	// NOTE: breaking this up with these ideas:
 	// - enclosed: tri is fully enclosed by one mesh or a combination of meshes in its group
 	// - obscured: tri is partially hidden by one mesh or a combination of meshes in its group

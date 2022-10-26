@@ -55,7 +55,7 @@ private:
 
 	// Removes Tris that are obscured (inside other meshes in their group). Note: if Mesh A is fully enclosed by Mesh B
 	// without intersections linking them, they will be part of separate groups, so Mesh A tris will not be culled.
-	void CullInnerTris(TArray<TArray<Geometry::TriMesh*>>& Groups);
+	void CullInnerTris(const UWorld* World, TArray<TArray<Geometry::TriMesh*>>& Groups);
 	
 };
 

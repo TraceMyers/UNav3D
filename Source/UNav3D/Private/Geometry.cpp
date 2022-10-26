@@ -4,6 +4,12 @@
 
 namespace Geometry {
 	
+	enum TRI_FLAGS {
+		TRI_A_OBSCURED = 0x0001,
+		TRI_B_OBSCURED = 0x0002,
+		TRI_C_OBSCURED = 0x0004
+	};
+	
 	Tri::Tri(const FVector& _A, const FVector& _B, const FVector& _C) :
 		A(_A), B(_B), C(_C),
 		Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
@@ -50,6 +56,18 @@ namespace Geometry {
 	
 	float Tri::GetArea(const Tri& T) {
 		return FVector::CrossProduct(T.A - T.B, T.A - T.C).Size() * 0.5f;
+	}
+
+	bool Tri::IsAObscured() const {
+		return Flags & TRI_A_OBSCURED;
+	}
+
+	bool Tri::IsBObscured() const {
+		return Flags & TRI_B_OBSCURED;
+	}
+
+	bool Tri::IsCObscured() const {
+		return Flags & TRI_C_OBSCURED;
 	}
 
 	TriMesh::TriMesh() :
@@ -111,11 +129,7 @@ namespace Geometry {
 			{1, 5}, {4, 7}, {2, 6}, {0, 3}
 		};
 
-		enum TRI_FLAGS {
-			PT_A_OBSCURED = 0x0001,
-			PT_B_OBSCURED = 0x0002,
-			PT_C_OBSCURED = 0x0004
-		};
+		
 
 		struct MeshHit {
 			MeshHit(const AStaticMeshActor* _Mesh, const FVector& _Location) :
@@ -246,7 +260,9 @@ namespace Geometry {
 			}
 			return true;
 		}
-		
+
+		// clever trick: assume the pt is inside the triangle. then, the pt makes three triangles - one with every pair
+		// of tri vertices. the sum of those areas is equal to the area of the triangle.
 		bool Internal_DoesPointTouchTri(const Tri& T, const FVector& P) {
 			return (
 				Tri::GetArea(P, T.A, T.B) + Tri::GetArea(P, T.B, T.C) + Tri::GetArea(P, T.C, T.A)
@@ -254,7 +270,9 @@ namespace Geometry {
 			);
 		}
 
-		// assumes pt has been projected onto plane with vertices
+		// does point touch this rectangular face? assumes pt has been projected onto plane with vertices.
+		// asks if the angles between the edges and the point make sense, and if the line segments of the point projected
+		// onto the edges are both shorter than the lengths of the edges.
 		bool Internal_DoesPointTouchFace(
 			const FVector& VertA,
 			const FVector& VertB,
@@ -341,7 +359,7 @@ namespace Geometry {
 					const FVector& FaceC = BBox.Vertices[FaceIndices[2]];
 					
 					// only need to check one direction, since this function is used in concert with
-					// Internal_IsPointInsideBox. If there are no vertices from box A in box B, then an intersecting
+					// Internal_IsPointInsideBox(). If there are no vertices from box A in box B, then an intersecting
 					// edge of A through B is checkable either direction.
 					if (Internal_Raycast(
 						*Origin, Dir, Length, FaceA, FaceB, FaceC, BBox.FaceNormals[j], PointOfIntersection
@@ -446,16 +464,14 @@ namespace Geometry {
 			const FCollisionQueryParams& Params,
 			const FVector& Pt,
 			float MinZ,
-			float MaxZ,
 			MeshHitCounter& MHitCtr
 		) {
 			TArray<MeshHit> MHits;
 
 			// trace through Pt along z axis (could be any axis, but z might have least superfluous hits) both ways 
-			const FVector TrPtA (Pt.X, Pt.Y, MinZ);
-			const FVector TrPtB (Pt.X, Pt.Y, MaxZ);
-			Internal_LineTraceThrough(World, Params, TrPtA, TrPtB, MHits);
-			Internal_LineTraceThrough(World, Params, TrPtB, TrPtA, MHits);
+			const FVector TrEnd (Pt.X, Pt.Y, MinZ);
+			Internal_LineTraceThrough(World, Params, Pt, TrEnd, MHits);
+			Internal_LineTraceThrough(World, Params, TrEnd, Pt, MHits);
 
 			// sort by z
 			MHits.Sort(MeshHit::ZCmp);
@@ -463,32 +479,31 @@ namespace Geometry {
 			// count through sorted mesh hits
 			MHitCtr.Reset();
 			for (int i = 0; i < MHits.Num(); i++) {
-				const MeshHit& MHit = MHits[i];
-				if (MHit.Location.X > Pt.X) {
-					// once we've gone past the point, any odd mesh hit cts mean pt is enclosed
-					return MHitCtr.AnyOdd();
-				}
-				MHitCtr.Add(MHit.Mesh);
+				MHitCtr.Add(MHits[i].Mesh);
 			}
-			return MHitCtr.AnyOdd(); // may not be necessary; could potentially just return false
+			// once we've gone to the point, any odd mesh hit cts mean pt is enclosed
+			return MHitCtr.AnyOdd();
 		}
 		
+		// params should be set to complex and to ignore the mesh of the given tri; does NOT clear flags beforehand
 		bool Internal_IsTriObscured(
 			const UWorld* World,
 			const FCollisionQueryParams& Params,
-			const Tri& T,
+			Tri& T,
 			float MinZ,
-			float MaxZ,
 			MeshHitCounter& MHitCtr
 		) {
-			if (
-				Internal_IsPointObscured(World, Params, T.A, MinZ, MaxZ, MHitCtr)
-				|| Internal_IsPointObscured(World, Params, T.B, MinZ, MaxZ, MHitCtr)
-				|| Internal_IsPointObscured(World, Params, T.C,MinZ, MaxZ, MHitCtr)
-			) {
-				return true;	
+			if (Internal_IsPointObscured(World, Params, T.A, MinZ, MHitCtr)) {
+				T.Flags |= TRI_A_OBSCURED;
 			}
-			return false;	
+			if (Internal_IsPointObscured(World, Params, T.B, MinZ, MHitCtr)) {
+				T.Flags |= TRI_B_OBSCURED;
+			}
+			if (Internal_IsPointObscured(World, Params, T.C,MinZ, MHitCtr)) {
+				T.Flags |= TRI_C_OBSCURED;	
+			}
+			constexpr uint32 OBSCURED = TRI_A_OBSCURED | TRI_B_OBSCURED | TRI_C_OBSCURED;
+			return T.Flags & OBSCURED;
 		}
 	}
 	
@@ -583,19 +598,24 @@ namespace Geometry {
 		}
 	}
 
-	void GetObscuredTris(
-		UWorld* World,
-		TArray<Tri*> Obscured,
-		const TriMesh& TMesh,
+	void FlagObscuredTris(
+		const UWorld* World,
+		TriMesh& TMesh,
 		const TArray<TriMesh*>& OtherTMeshes,
-		const FVector& GroupExtMin, // group bounding box extrema
-		const FVector& GroupExtMax
+		const FVector& GroupExtMin 
 	) {
 		MeshHitCounter MHitCtr(OtherTMeshes);
 		FCollisionQueryParams Params;
 		Params.AddIgnoredActor(TMesh.MeshActor);
 		Params.bIgnoreBlocks = true;
 		Params.bTraceComplex = true;
+		const float MinZ = GroupExtMin.Z;
+
+		TArray<Tri>& Tris = TMesh.Tris;
+		for (int i = 0; i < Tris.Num(); i++) {
+			// flags obscured vertices on tris, ignoring t/f output
+			Internal_IsTriObscured(World, Params, Tris[i], MinZ, MHitCtr);
+		}
 	}
 
 
