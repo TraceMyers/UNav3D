@@ -17,60 +17,24 @@ namespace Geometry {
 	// Edges must be re-pointed if Tri's container reallocates
 	struct Tri {
 		
-		Tri(const FVector& _A, const FVector& _B, const FVector& _C) :
-			A(_A), B(_B), C(_C),
-			Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
-			Edges{nullptr},
-			Flags(0x0),
-			Center((_A + _B + _C) * ONE_THIRD),
-			LongestSidelen(GetLongestTriSidelen(_A, _B, _C)),
-			Area(GetArea(_A, _B, _C))
-		{}
+		Tri(const FVector& _A, const FVector& _B, const FVector& _C);
+		~Tri();
 
-		~Tri() {
-			for (int i = 0; i < 3; i++) {
-				if (Edges[i] != nullptr) {
-					Tri** EdgesOfEdge = Edges[i]->Edges;
-					for (int j = 0; j < 3; j++) {
-						if (EdgesOfEdge[j] == this) {
-							EdgesOfEdge[j] = nullptr;
-							break;
-						}
-					}
-				}
-			}		
-		}
-		
-		static float GetLongestTriSidelen(const FVector& A, const FVector& B, const FVector& C) {
-			const float AB = (A - B).Size();
-			const float BC = (B - C).Size();
-			const float CA = (C - A).Size();
-			if (AB > BC) {
-				if (AB > CA) {
-					return AB;
-				}
-				return CA;
-			}
-			if (BC > CA) {
-				return BC;
-			}
-			return CA;
-		}
+		// meant for use in constructor
+		static float GetLongestTriSidelen(const FVector& A, const FVector& B, const FVector& C);
 
-		static float GetArea(const FVector& A, const FVector& B, const FVector& C) {
-			return FVector::CrossProduct(A - B, A - C).Size() * 0.5f;
-		}
-		
-		static float GetArea(const Tri& T) {
-			return FVector::CrossProduct(T.A - T.B, T.A - T.C).Size() * 0.5f;
-		}
+		// get the area of a triangle with vertices A, B, C
+		static float GetArea(const FVector& A, const FVector& B, const FVector& C);
+
+		// get the area of tri T
+		static float GetArea(const Tri& T);
 
 		const FVector& A;
 		const FVector& B;
 		const FVector& C;
 		const FVector Normal;
 		Tri* Edges[3]; // adjacent tris touching AB, BC, and CA in that order
-		const uint32 Flags;
+		uint32 Flags;
 		// for faster intersection checking
 		const FVector Center;
 		const float LongestSidelen;
@@ -79,10 +43,6 @@ namespace Geometry {
 
 	// For storing world bounding box vertices of UBoxComponents and AStaticMeshActors' Meshes.
 	// When these overlap, we consider the possibility that the static meshes inside the boxes overlap.
-	// This implementation of a bounding box includes rotations, which makes it a little more computationally
-	// expensive to check if a point lies inside or if a line intersects a face. However, this saves processor time
-	// in the long run since *far* more work is done checking where meshes overlap, if they potentially overlap. And,
-	// bounding boxes that rotate with meshes are much smaller, thus giving less false positives.
 	struct BoundingBox {
 		FVector Vertices[RECT_PRISM_PTS];
 		FVector FaceNormals[RECT_PRISM_FACES];
@@ -90,51 +50,22 @@ namespace Geometry {
 		float OverlapCheckSqMags[3];
 	};
 	
-	// Mesh made of Tris, vertices populated from GPU vertex buffer. Currently only supports nonmoving actors, but with
-	// the MeshActor reference, movement could be supported in the future; BoundingBox is used for initial tests -
-	// if two BB's overlap, the TriMeshes *might* overlap.
+	// Mesh made of Tris, vertices populated from GPU vertex buffer.
 	struct TriMesh {
 		
-		TriMesh() :
-			MeshActor(nullptr),
-			Box(),
-			VertexCt(0),
-			Vertices(nullptr)
-		{}
-	
-		TriMesh(const TriMesh& OtherMesh) {
-			memcpy(this, &OtherMesh, sizeof(TriMesh));
-		}
-		
-		~TriMesh() {
-			if (Vertices != nullptr) {
-				delete Vertices;
-				Vertices = nullptr;
-			}
-		}
+		TriMesh();
+		TriMesh(const TriMesh& OtherMesh);
+		~TriMesh();
 
-		// checking of the mesh actors are the same provides a tiny bit of debugging value
-		// must be changed if UNav3D changes s.t. we expect more than one TriMesh per mesh actor
-		bool operator == (const TriMesh& OtherMesh) const {
-			return this->MeshActor == OtherMesh.MeshActor;	
-		}
+		// checks if the TMeshes point to the same static mesh
+		bool operator == (const TriMesh& OtherMesh) const;
 
-		void ResetVertexData() {
-			VertexCt = 0;
-			if (Vertices != nullptr) {
-				delete Vertices;
-				Vertices = nullptr;
-			}
-			if (Tris.Num() > 0) {
-				Tris.Empty();
-			}
-		}
+		// Clears Vertices and Tris, since they are inextricably linked
+		void ResetVertexData();
 
 		AStaticMeshActor* MeshActor;
 		BoundingBox Box;
 		int VertexCt;
-		// It might be a good idea to make this a TUniquePtr, but MoveTemp() doesn't work inside
-		// TriMesh(const TriMesh&), which is necessary for TArray
 		FVector* Vertices;
 		TArray<Tri> Tris;
 	};

@@ -3,6 +3,88 @@
 #include "Engine/StaticMeshActor.h"
 
 namespace Geometry {
+	
+	Tri::Tri(const FVector& _A, const FVector& _B, const FVector& _C) :
+		A(_A), B(_B), C(_C),
+		Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
+		Edges{nullptr},
+		Flags(0x0),
+		Center((_A + _B + _C) * ONE_THIRD),
+		LongestSidelen(GetLongestTriSidelen(_A, _B, _C)),
+		Area(GetArea(_A, _B, _C))
+	{}
+
+	Tri::~Tri() {
+		for (int i = 0; i < 3; i++) {
+			if (Edges[i] != nullptr) {
+				Tri** EdgesOfEdge = Edges[i]->Edges;
+				for (int j = 0; j < 3; j++) {
+					if (EdgesOfEdge[j] == this) {
+						EdgesOfEdge[j] = nullptr;
+						break;
+					}
+				}
+			}
+		}		
+	}
+
+	float Tri::GetLongestTriSidelen(const FVector& A, const FVector& B, const FVector& C) {
+		const float AB = (A - B).Size();
+		const float BC = (B - C).Size();
+		const float CA = (C - A).Size();
+		if (AB > BC) {
+			if (AB > CA) {
+				return AB;
+			}
+			return CA;
+		}
+		if (BC > CA) {
+			return BC;
+		}
+		return CA;
+	}
+
+	float Tri::GetArea(const FVector& A, const FVector& B, const FVector& C) {
+		return FVector::CrossProduct(A - B, A - C).Size() * 0.5f;
+	}
+	
+	float Tri::GetArea(const Tri& T) {
+		return FVector::CrossProduct(T.A - T.B, T.A - T.C).Size() * 0.5f;
+	}
+
+	TriMesh::TriMesh() :
+		MeshActor(nullptr),
+		Box(),
+		VertexCt(0),
+		Vertices(nullptr)
+	{}
+
+	TriMesh::TriMesh(const TriMesh& OtherMesh) {
+		memcpy(this, &OtherMesh, sizeof(TriMesh));
+	}
+	
+	TriMesh::~TriMesh() {
+		if (Vertices != nullptr) {
+			delete Vertices;
+			Vertices = nullptr;
+		}
+	}
+
+	// checking of the mesh actors are the same provides a tiny bit of debugging value
+	bool TriMesh::operator == (const TriMesh& OtherMesh) const {
+		return this->MeshActor == OtherMesh.MeshActor;	
+	}
+
+	void TriMesh::ResetVertexData() {
+		VertexCt = 0;
+		if (Vertices != nullptr) {
+			delete Vertices;
+			Vertices = nullptr;
+		}
+		if (Tris.Num() > 0) {
+			Tris.Empty();
+		}
+	}
 
 	namespace {
 
@@ -56,8 +138,8 @@ namespace Geometry {
 			const FVector Location;
 		};
 
-		// used for counting hits through a point to check if a point lies between mesh hits
-		// data meant to be populated only at constructor
+		// used for counting mesh hits up to a point to check if a point lies between mesh hits.
+		// mesh data only populated only at constructor
 		struct MeshHitCounter {
 
 			MeshHitCounter(const TArray<TriMesh*>& TMeshPtrs) {
@@ -90,6 +172,8 @@ namespace Geometry {
 					MeshToCt[Keys[i]] = 0;
 				}
 			}
+
+		private:
 			
 			TMap<AStaticMeshActor*, int> MeshToCt;
 			TArray<AStaticMeshActor*> Keys;
@@ -97,6 +181,10 @@ namespace Geometry {
 		};	
 		
 		// populate BBox with vertices and precomputed overlap-checking values
+		// This implementation of a bounding box includes rotations, which makes it a little more computationally
+		// expensive to check if a point lies inside or if a line intersects a face. However, this saves processor time
+		// in the long run since *far* more work is done checking where meshes overlap, if they potentially overlap. And,
+		// bounding boxes that rotate with meshes are much smaller, thus giving less false positives.
 		void Internal_SetBoundingBox(
 			BoundingBox& BBox,
 			const FVector& Extent,
@@ -184,17 +272,19 @@ namespace Geometry {
 			return (CosTheta >= 0) && (CosPhi >= 0) && (LenPVC * CosTheta <= LenFEB) && (LenPVC * CosPhi <= LenFEC);
 		}
 
+		// does the ray hit the rectangular face provided? Omitted vertex is assumed to make the face rectangular
+		// and BAC is assumed to form a right angle
 		bool Internal_Raycast(
 			const FVector& Origin,
 			const FVector& Dir,
 			float Length,
-			const FVector& PlanePtA,
-			const FVector& PlanePtB,
-			const FVector& PlanePtC,
-			const FVector& Normal, // could get here, but currently precomputed for BoundingBox
+			const FVector& FacePtA,
+			const FVector& FacePtB,
+			const FVector& FacePtC,
+			const FVector& Normal, // could calc here, but currently precomputed for BoundingBox
 			FVector& POI
 		) {
-			const FVector PVec = Origin - PlanePtA;
+			const FVector PVec = Origin - FacePtA;
 			if (FVector::DotProduct(PVec, Normal) <= 0.0f) {
 				return false;
 			}
@@ -208,7 +298,7 @@ namespace Geometry {
 				return false;
 			}
 			POI = Origin + Dir * RayHitDist;
-			return Internal_DoesPointTouchFace(PlanePtA, PlanePtB, PlanePtC, POI);
+			return Internal_DoesPointTouchFace(FacePtA, FacePtB, FacePtC, POI);
 		}
 
 		// thinks in triangles: the one made by the tri plane, origin -> center, origin -> projection
@@ -249,6 +339,10 @@ namespace Geometry {
 					const FVector& FaceA = BBox.Vertices[FaceIndices[0]];
 					const FVector& FaceB = BBox.Vertices[FaceIndices[1]];
 					const FVector& FaceC = BBox.Vertices[FaceIndices[2]];
+					
+					// only need to check one direction, since this function is used in concert with
+					// Internal_IsPointInsideBox. If there are no vertices from box A in box B, then an intersecting
+					// edge of A through B is checkable either direction.
 					if (Internal_Raycast(
 						*Origin, Dir, Length, FaceA, FaceB, FaceC, BBox.FaceNormals[j], PointOfIntersection
 					)) {
@@ -451,7 +545,6 @@ namespace Geometry {
 		return false;
 	}
 	
-
 	void GetGroupExtrema(TArray<TriMesh*> TMeshes, FVector& Min, FVector& Max, bool NudgeOutward) {
 		const int TMeshCt = TMeshes.Num();
 		if (TMeshCt == 0) {
