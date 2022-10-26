@@ -53,9 +53,10 @@ private:
 		TArray<Geometry::TriMesh>& InMeshes
 	);
 
-	// Removes Tris that are obscured (inside other meshes in their group). Note: if Mesh A is fully enclosed by Mesh B
-	// without intersections linking them, they will be part of separate groups, so Mesh A tris will not be culled.
-	void CullInnerTris(const UWorld* World, TArray<TArray<Geometry::TriMesh*>>& Groups);
+	// Any tris that have vertices inside other meshes have those vertices flagged
+	static void FlagObscuredTris(const UWorld* World, TArray<TArray<Geometry::TriMesh*>>& Groups);
+
+	void BuildPolygonsAtMeshIntersections(TArray<TArray<Geometry::TriMesh*>>& Groups);
 	
 };
 

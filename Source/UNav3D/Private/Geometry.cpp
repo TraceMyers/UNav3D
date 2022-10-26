@@ -127,7 +127,11 @@ namespace Geometry {
 			{1, 5}, {4, 7}, {2, 6}, {0, 3}
 		};
 
-		
+		enum RAY_HIT {
+			RAY_HIT_NONE=0,
+			RAY_HIT_ATOB=1,
+			RAY_HIT_BTOA=2
+		};
 
 		struct MeshHit {
 			MeshHit(const AStaticMeshActor* _Mesh, const FVector& _Location) :
@@ -371,19 +375,23 @@ namespace Geometry {
 			return false;
 		}
 
-		bool Internal_DoesLineSegmentIntersectTri(const FVector& LSA, const FVector& LSB, const Tri& T) {
-			FVector PointOfIntersection;
+		RAY_HIT Internal_RaycastBidirectional(
+			const FVector& LSA,
+			const FVector& LSB,
+			const Tri& T,
+			FVector& PointOfIntersection
+		) {
 			FVector Dir = LSB - LSA;
 			const float Length = Dir.Size();
 			Dir *= 1.0f / Length;
 			if (Internal_Raycast(LSA, Dir, Length, T, PointOfIntersection)) {
-				return true;
+				return RAY_HIT_ATOB;
 			}
 			Dir = -Dir;
 			if (Internal_Raycast(LSB, Dir, Length, T, PointOfIntersection)) {
-				return true;
+				return RAY_HIT_BTOA;
 			}
-			return false;
+			return RAY_HIT_NONE;
 		}
 
 		bool Internal_DoBoundingBoxesIntersect(const BoundingBox& BBoxA, const BoundingBox& BBoxB) {
@@ -410,6 +418,7 @@ namespace Geometry {
 			const TArray<Tri>& TMeshATris = TMeshA.Tris;
 			const TArray<Tri>& TMeshBTris = TMeshB.Tris;
 			const int TMeshBTriCt = TMeshBTris.Num();
+			FVector POI;
 			for (int i = 0; i < TMeshATris.Num(); i++) {
 				const Tri& T0 = TMeshATris[i];
 				for (int j = 0; j < TMeshBTriCt; j++) {
@@ -419,12 +428,12 @@ namespace Geometry {
 					if (
 						(Dist < T0.LongestSidelen + T1.LongestSidelen)
 						&& (
-							Internal_DoesLineSegmentIntersectTri(T0.A, T0.B, T1)
-							|| Internal_DoesLineSegmentIntersectTri(T0.B, T0.C, T1)
-							|| Internal_DoesLineSegmentIntersectTri(T0.C, T0.A, T1)
-							|| Internal_DoesLineSegmentIntersectTri(T1.A, T1.B, T0)
-							|| Internal_DoesLineSegmentIntersectTri(T1.B, T1.C, T0)
-							|| Internal_DoesLineSegmentIntersectTri(T1.C, T1.A, T0)
+							Internal_RaycastBidirectional(T0.A, T0.B, T1, POI)
+							|| Internal_RaycastBidirectional(T0.B, T0.C, T1, POI)
+							|| Internal_RaycastBidirectional(T0.C, T0.A, T1, POI)
+							|| Internal_RaycastBidirectional(T1.A, T1.B, T0, POI)
+							|| Internal_RaycastBidirectional(T1.B, T1.C, T0, POI)
+							|| Internal_RaycastBidirectional(T1.C, T1.A, T0, POI)
 						)
 					) {
 						return true;
@@ -497,11 +506,90 @@ namespace Geometry {
 			if (Internal_IsPointObscured(World, Params, T.B, MinZ, MHitCtr)) {
 				T.Flags |= TRI_B_OBSCURED;
 			}
-			if (Internal_IsPointObscured(World, Params, T.C,MinZ, MHitCtr)) {
+			if (Internal_IsPointObscured(World, Params, T.C, MinZ, MHitCtr)) {
 				T.Flags |= TRI_C_OBSCURED;	
 			}
 			constexpr uint32 OBSCURED = TRI_A_OBSCURED | TRI_B_OBSCURED | TRI_C_OBSCURED;
 			return T.Flags & OBSCURED;
+		}
+
+		void Internal_GetTriPairPolyEdges(
+			const Tri& T0,
+			const Tri& T1,
+			UnstructuredPolygon& PolyA,
+			UnstructuredPolygon& PolyB
+		) {
+			FVector PointOfIntersection;
+			FVector TruePOI[2][2];
+			int T0HitCt = 0;
+			int T1HitCt = 0;
+			if(Internal_RaycastBidirectional(T0.A, T0.B, T1, PointOfIntersection)) {
+				TruePOI[0][T0HitCt++] = PointOfIntersection;	
+			}
+			if(Internal_RaycastBidirectional(T0.B, T0.C, T1, PointOfIntersection)) {
+				TruePOI[0][T0HitCt++] = PointOfIntersection;	
+			}
+			if(T0HitCt < 2 && Internal_RaycastBidirectional(T0.C, T0.A, T1, PointOfIntersection)) {
+				TruePOI[0][T0HitCt++] = PointOfIntersection;	
+			}
+			if(Internal_RaycastBidirectional(T1.A, T1.B, T0, PointOfIntersection)) {
+				TruePOI[1][T1HitCt++] = PointOfIntersection;	
+			}
+			if(Internal_RaycastBidirectional(T1.B, T1.C, T0, PointOfIntersection)) {
+				TruePOI[1][T1HitCt++] = PointOfIntersection;	
+			}
+			if(T1HitCt < 2 && Internal_RaycastBidirectional(T1.C, T1.A, T0, PointOfIntersection)) {
+				TruePOI[1][T1HitCt++] = PointOfIntersection;	
+			}
+			if (T0HitCt == 1) {
+				if (T1HitCt == 1) {
+					
+				}
+				else {
+					// bad
+				}
+			}
+			else if (T0HitCt == 2) {
+				if (T1HitCt == 0) {
+					
+				}
+				else {
+					// bad
+				}
+			}
+			else if (T1HitCt == 2) {
+				if (T0HitCt == 0) {
+					
+				}
+				else {
+					// bad
+				}
+			}
+			else {
+				// no hit
+			}
+		}
+
+		void Internal_FindPolyEdges(
+			const TriMesh& TMeshA,
+			const TriMesh& TMeshB,
+			TArray<UnstructuredPolygon>& UPolysA,
+			TArray<UnstructuredPolygon>& UPolysB
+		) {
+			const TArray<Tri>& TrisA = TMeshA.Tris;
+			const TArray<Tri>& TrisB = TMeshB.Tris;
+			for (int i = 0; i < TrisA.Num(); i++) {
+				const Tri& TA = TrisA[i];
+				UnstructuredPolygon& PolyA = UPolysA[i];
+				for (int j = 0; j < TrisB.Num(); j++) {
+					const Tri& TB = TrisB[j];
+					const float Dist = FVector::Dist(TA.Center, TB.Center);
+					if (Dist <= TA.LongestSidelen + TB.LongestSidelen) {
+						UnstructuredPolygon& PolyB = UPolysB[j];
+						Internal_GetTriPairPolyEdges(TA, TB, PolyA, PolyB);
+					}
+				}
+			}
 		}
 	}
 	
@@ -614,6 +702,24 @@ namespace Geometry {
 			// flags obscured vertices on tris, ignoring t/f output
 			Internal_IsTriObscured(World, Params, Tris[i], MinZ, MHitCtr);
 		}
+	}
+
+	void PopulateUnstructuredPolygons(TArray<TriMesh*>& Group, TArray<TArray<UnstructuredPolygon>>& GroupUPolys) {
+		const int GroupCt = Group.Num();
+		for (int i = 0; i < GroupCt; i++) {
+			GroupUPolys.Add(TArray<UnstructuredPolygon>());
+			TArray<UnstructuredPolygon>& UPolys = GroupUPolys[i];
+			UPolys.Init(UnstructuredPolygon(), Group[i]->Tris.Num());
+		}
+		for (int i = 0; i < GroupCt - 1; i++) {
+			const TriMesh& TMeshA = *Group[i];
+			TArray<UnstructuredPolygon>& UPolysA = GroupUPolys[i];
+			for (int j = i + 1; j < GroupCt; j++) {
+				const TriMesh& TMeshB = *Group[j];
+				TArray<UnstructuredPolygon>& UPolysB = GroupUPolys[j];
+				Internal_FindPolyEdges(TMeshA, TMeshB, UPolysA, UPolysB);	
+			}
+		}	
 	}
 
 

@@ -84,6 +84,16 @@ namespace Geometry {
 		TArray<FVector> Vertices;
 	};
 
+	struct PolyEdge {
+		FVector A;
+		FVector B;
+	};
+	
+	//
+	struct UnstructuredPolygon {
+		TArray<PolyEdge> Edges;	
+	};
+
 	// Populates a BoundingBox from a AStaticMeshActor
 	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor);
 
@@ -112,6 +122,11 @@ namespace Geometry {
 		TriMesh& TMesh,
 		const TArray<TriMesh*>& OtherTMeshes,
 		const FVector& GroupExtMin // group bounding box extrema min
+	);
+
+	void PopulateUnstructuredPolygons(
+		TArray<TriMesh*>& Group,
+		TArray<TArray<UnstructuredPolygon>>& UPolys
 	);
 	
 	// NOTE: breaking this up with these ideas:

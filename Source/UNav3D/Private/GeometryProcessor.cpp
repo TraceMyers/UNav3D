@@ -56,6 +56,7 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
 	TArray<Geometry::TriMesh>& InMeshes,
 	TArray<Geometry::TriMesh>& OutMeshes
 ) {
+	OutMeshes.Reserve(InMeshes.Num());
 	TArray<TArray<Geometry::TriMesh*>> IntersectGroups;
 	GetIntersectGroups(World, IntersectGroups, InMeshes);
 
@@ -69,7 +70,7 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
 		putchar('\n');
 	}
 
-	CullInnerTris(World, IntersectGroups);
+	FlagObscuredTris(World, IntersectGroups);
 	
 	// InMeshes.Empty();
 	return GEOPROC_SUCCESS;
@@ -230,7 +231,7 @@ void GeometryProcessor::GetIntersectGroups(
 	}
 }
 
-void GeometryProcessor::CullInnerTris(const UWorld* World, TArray<TArray<Geometry::TriMesh*>>& Groups) {
+void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<Geometry::TriMesh*>>& Groups) {
 	for (int i = 0; i < Groups.Num(); i++) {
 		TArray<Geometry::TriMesh*>& Group = Groups[i];
 		FVector GroupBBoxMin;
@@ -242,5 +243,14 @@ void GeometryProcessor::CullInnerTris(const UWorld* World, TArray<TArray<Geometr
 			OtherTMeshes.Remove(CurTMesh);
 			Geometry::FlagObscuredTris(World, *CurTMesh, OtherTMeshes, GroupBBoxMin);
 		}
+	}
+}
+
+void GeometryProcessor::BuildPolygonsAtMeshIntersections(TArray<TArray<Geometry::TriMesh*>>& Groups) {
+
+	for (int i = 0; i < Groups.Num(); i++) {
+		TArray<TArray<Geometry::UnstructuredPolygon>> UPolys; // one per tri
+		TArray<Geometry::TriMesh*>& Group = Groups[i];
+		
 	}
 }
