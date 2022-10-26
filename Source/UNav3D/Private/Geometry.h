@@ -29,10 +29,14 @@ namespace Geometry {
 		// get the area of tri T
 		static float GetArea(const Tri& T);
 
-		// asking if these vertices are inside other meshes
-		bool IsAObscured() const;
-		bool IsBObscured() const;
-		bool IsCObscured() const;
+		// asking if this vertex is inside any other meshes; need to be set by Geometry::FlagObscuredTris() first
+		inline bool IsAObscured() const;
+		
+		// asking if this vertex is inside any other meshes; need to be set by Geometry::FlagObscuredTris() first
+		inline bool IsBObscured() const;
+		
+		// asking if this vertex is inside any other meshes; need to be set by Geometry::FlagObscuredTris() first
+		inline bool IsCObscured() const;
 
 		const FVector& A;
 		const FVector& B;

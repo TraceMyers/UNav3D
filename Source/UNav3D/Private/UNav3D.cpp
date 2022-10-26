@@ -89,6 +89,14 @@ void FUNav3DModule::PluginButtonClicked(){
 		DRAW_TRIMESH_TRIS(World, TMesh, j)
 		DRAW_TRIMESH_VERTICES(World, TMesh, j);
 	}
+
+	// temp to ensure we're not leaking during production
+	for (int i = 0; i < TMeshes.Num(); i++) {
+		TMeshes[i].ResetVertexData();
+	}
+	for (int i = 0; i < ReformedTMeshes.Num(); i++) {
+		ReformedTMeshes[i].ResetVertexData();
+	}
 }
 
 void FUNav3DModule::RegisterMenus() {

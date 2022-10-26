@@ -99,14 +99,12 @@ namespace Geometry {
 			delete Vertices;
 			Vertices = nullptr;
 		}
-		if (Tris.Num() > 0) {
-			Tris.Empty();
-		}
+		Tris.Empty(32);
 	}
 
 	namespace {
 
-		// The unscaled extents of a bounding box
+		// The unscaled/unrotated/untranslated vertices of a bounding box
 		const FVector BaseExtent[RECT_PRISM_PTS] {
 			FVector(-1.0f, -1.0f, -1.0f), // neighbors 1, 2, 3
 			FVector( 1.0f, -1.0f, -1.0f),
@@ -567,7 +565,7 @@ namespace Geometry {
 		}
 		// allows using if/else in loop
 		Min = TMeshes[0]->Box.Vertices[0];
-		Max = TMeshes[0]->Box.Vertices[0];
+		Max = Min;
 		for (int i = 0; i < TMeshCt; i++) {
 			const FVector* BoxVerts = TMeshes[i]->Box.Vertices;
 			for (int j = 0; j < RECT_PRISM_PTS; j++) {
