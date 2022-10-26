@@ -28,6 +28,73 @@ namespace Geometry {
 			{3, 5}, {3, 6}, {7, 5}, {7, 6},
 			{1, 5}, {4, 7}, {2, 6}, {0, 3}
 		};
+
+		enum TRI_FLAGS {
+			PT_A_OBSCURED = 0x0001,
+			PT_B_OBSCURED = 0x0002,
+			PT_C_OBSCURED = 0x0004
+		};
+
+		struct MeshHit {
+			MeshHit(const AStaticMeshActor* _Mesh, const FVector& _Location) :
+				Mesh{_Mesh}, Location(_Location)
+			{}
+			
+			static bool XCmp(const MeshHit& A, const MeshHit& B) {
+				return A.Location.X < B.Location.X;
+			}
+			
+			static bool YCmp(const MeshHit& A, const MeshHit& B) {
+				return A.Location.Y < B.Location.Y;
+			}
+			
+			static bool ZCmp(const MeshHit& A, const MeshHit& B) {
+				return A.Location.Z < B.Location.Z;
+			}
+			
+			const AStaticMeshActor* Mesh;
+			const FVector Location;
+		};
+
+		// used for counting hits through a point to check if a point lies between mesh hits
+		// data meant to be populated only at constructor
+		struct MeshHitCounter {
+
+			MeshHitCounter(const TArray<TriMesh*>& TMeshPtrs) {
+				for (int i = 0; i < TMeshPtrs.Num(); i++) {
+					AStaticMeshActor* MeshActor = TMeshPtrs[i]->MeshActor;
+					MeshToCt.Add(MeshActor, 0);
+					Keys.Add(MeshActor);
+				}		
+			}
+		
+			void Add(const AStaticMeshActor* MeshActor) {
+				MeshToCt[MeshActor] += 1;
+			}
+
+			bool IsOdd(const AStaticMeshActor* MeshActor) {
+				return MeshToCt[MeshActor] % 2 == 1;
+			}
+
+			bool AnyOdd() {
+				for (int i = 0; i < Keys.Num(); i++) {
+					if (MeshToCt[Keys[i]] % 2 == 1) {
+						return true;
+					}
+				}
+				return false;
+			}
+
+			void Reset() {
+				for (int i = 0; i < Keys.Num(); i++) {
+					MeshToCt[Keys[i]] = 0;
+				}
+			}
+			
+			TMap<AStaticMeshActor*, int> MeshToCt;
+			TArray<AStaticMeshActor*> Keys;
+			
+		};	
 		
 		// populate BBox with vertices and precomputed overlap-checking values
 		void Internal_SetBoundingBox(
@@ -256,6 +323,79 @@ namespace Geometry {
 			}
 			return false;
 		}
+
+		// TODO: currently depends on a channel added in-project. will need to have the plugin create the channel...
+		// TODO: ... used here. Default channel result is overlap.
+		void Internal_LineTraceThrough(
+			const UWorld* World,
+			const FCollisionQueryParams& Params,
+			const FVector& TrStart,
+			const FVector& TrEnd,
+			TArray<MeshHit>& MHits
+		) {
+			TArray<FHitResult> HitResults;
+			World->LineTraceMultiByChannel(HitResults, TrStart, TrEnd, ECC_GameTraceChannel1, Params);
+			for (int i = 0; i < HitResults.Num(); i++) {
+				const FHitResult& Hit = HitResults[i];
+				AActor* HitActor = Hit.GetActor();
+				if (HitActor != nullptr) {
+					const AStaticMeshActor* HitMesh = Cast<AStaticMeshActor>(HitActor);
+					if (HitMesh != nullptr) {
+						MHits.Add(MeshHit(HitMesh, Hit.Location));	
+					}	
+				}
+			}	
+		}
+		
+		bool Internal_IsPointObscured(
+			const UWorld* World,
+			const FCollisionQueryParams& Params,
+			const FVector& Pt,
+			float MinZ,
+			float MaxZ,
+			MeshHitCounter& MHitCtr
+		) {
+			TArray<MeshHit> MHits;
+
+			// trace through Pt along z axis (could be any axis, but z might have least superfluous hits) both ways 
+			const FVector TrPtA (Pt.X, Pt.Y, MinZ);
+			const FVector TrPtB (Pt.X, Pt.Y, MaxZ);
+			Internal_LineTraceThrough(World, Params, TrPtA, TrPtB, MHits);
+			Internal_LineTraceThrough(World, Params, TrPtB, TrPtA, MHits);
+
+			// sort by z
+			MHits.Sort(MeshHit::ZCmp);
+			
+			// count through sorted mesh hits
+			MHitCtr.Reset();
+			for (int i = 0; i < MHits.Num(); i++) {
+				const MeshHit& MHit = MHits[i];
+				if (MHit.Location.X > Pt.X) {
+					// once we've gone past the point, any odd mesh hit cts mean pt is enclosed
+					return MHitCtr.AnyOdd();
+				}
+				MHitCtr.Add(MHit.Mesh);
+			}
+			return MHitCtr.AnyOdd(); // may not be necessary; could potentially just return false
+		}
+		
+		bool Internal_IsTriObscured(
+			const UWorld* World,
+			const FCollisionQueryParams& Params,
+			const Tri& T,
+			float MinZ,
+			float MaxZ,
+			MeshHitCounter& MHitCtr
+		) {
+			if (
+				Internal_IsPointObscured(World, Params, T.A, MinZ, MaxZ, MHitCtr)
+				|| Internal_IsPointObscured(World, Params, T.B, MinZ, MaxZ, MHitCtr)
+				|| Internal_IsPointObscured(World, Params, T.C,MinZ, MaxZ, MHitCtr)
+			) {
+				return true;	
+			}
+			return false;	
+		}
 	}
 	
 	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor) {
@@ -310,6 +450,7 @@ namespace Geometry {
 		}
 		return false;
 	}
+	
 
 	void GetGroupExtrema(TArray<TriMesh*> TMeshes, FVector& Min, FVector& Max, bool NudgeOutward) {
 		const int TMeshCt = TMeshes.Num();
@@ -347,6 +488,21 @@ namespace Geometry {
 			Max += FVector::OneVector;
 			Min -= FVector::OneVector;
 		}
+	}
+
+	void GetObscuredTris(
+		UWorld* World,
+		TArray<Tri*> Obscured,
+		const TriMesh& TMesh,
+		const TArray<TriMesh*>& OtherTMeshes,
+		const FVector& GroupExtMin, // group bounding box extrema
+		const FVector& GroupExtMax
+	) {
+		MeshHitCounter MHitCtr(OtherTMeshes);
+		FCollisionQueryParams Params;
+		Params.AddIgnoredActor(TMesh.MeshActor);
+		Params.bIgnoreBlocks = true;
+		Params.bTraceComplex = true;
 	}
 
 

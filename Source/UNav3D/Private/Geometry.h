@@ -21,8 +21,9 @@ namespace Geometry {
 			A(_A), B(_B), C(_C),
 			Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
 			Edges{nullptr},
+			Flags(0x0),
 			Center((_A + _B + _C) * ONE_THIRD),
-			LongestSidelen(GetLongestSidelen(_A, _B, _C)),
+			LongestSidelen(GetLongestTriSidelen(_A, _B, _C)),
 			Area(GetArea(_A, _B, _C))
 		{}
 
@@ -39,16 +40,8 @@ namespace Geometry {
 				}
 			}		
 		}
-
-		static float GetArea(const FVector& A, const FVector& B, const FVector& C) {
-			return FVector::CrossProduct(A - B, A - C).Size() * 0.5f;
-		}
 		
-		static float GetArea(const Tri& T) {
-			return FVector::CrossProduct(T.A - T.B, T.A - T.C).Size() * 0.5f;
-		}
-
-		static float GetLongestSidelen(const FVector& A, const FVector& B, const FVector& C) {
+		static float GetLongestTriSidelen(const FVector& A, const FVector& B, const FVector& C) {
 			const float AB = (A - B).Size();
 			const float BC = (B - C).Size();
 			const float CA = (C - A).Size();
@@ -64,11 +57,20 @@ namespace Geometry {
 			return CA;
 		}
 
+		static float GetArea(const FVector& A, const FVector& B, const FVector& C) {
+			return FVector::CrossProduct(A - B, A - C).Size() * 0.5f;
+		}
+		
+		static float GetArea(const Tri& T) {
+			return FVector::CrossProduct(T.A - T.B, T.A - T.C).Size() * 0.5f;
+		}
+
 		const FVector& A;
 		const FVector& B;
 		const FVector& C;
 		const FVector Normal;
 		Tri* Edges[3]; // adjacent tris touching AB, BC, and CA in that order
+		const uint32 Flags;
 		// for faster intersection checking
 		const FVector Center;
 		const float LongestSidelen;
@@ -83,7 +85,6 @@ namespace Geometry {
 	// bounding boxes that rotate with meshes are much smaller, thus giving less false positives.
 	struct BoundingBox {
 		FVector Vertices[RECT_PRISM_PTS];
-		// -- for overlap checking --
 		FVector FaceNormals[RECT_PRISM_FACES];
 		FVector OverlapCheckVectors[3];
 		float OverlapCheckSqMags[3];
@@ -165,16 +166,17 @@ namespace Geometry {
 	// Gets the extrema of world axis-aligned Bounding Box of a group of TMeshes
 	void GetGroupExtrema(TArray<TriMesh*> TMeshes, FVector& Min, FVector& Max, bool NudgeOutward=false);
 
-	// populates Obscured with tris in TMesh that are fully inside any other meshes in OtherTMeshes
-	// populates Intersecting with tris in TMesh and are partially obscured
-	// populates OtherIntersecting with tris in OtherTMeshes 
-	// void GetObscuredAndIntersectingTris(
-	// 	TArray<Tri&> Obscured,
-	// 	TArray<Tri&> Intersecting,
-	// 	TArray<TArray<Tri&>> OtherIntersecting,
-	// 	const TriMesh& TMesh,
-	// 	const TArray<TriMesh*>& OtherTMeshes
-	// );
+	// populates Obscured with (most) tris in TMesh that are fully or partly inside any other meshes in OtherTMeshes.
+	// if any vertices are inside other meshes, that tri is definitely 'obscured'. Some tris will be obscured
+	// even if they aren't caught here, since all of their vertices may be visible but they're intersected in the middle.
+	void GetObscuredTris(
+		UWorld* World,
+		TArray<Tri*> Obscured,
+		const TriMesh& TMesh,
+		const TArray<TriMesh*>& OtherTMeshes,
+		const FVector& GroupExtMin,
+		const FVector& GroupExtMax
+	);
 	// NOTE: breaking this up with these ideas:
 	// - enclosed: tri is fully enclosed by one mesh or a combination of meshes in its group
 	// - obscured: tri is partially hidden by one mesh or a combination of meshes in its group

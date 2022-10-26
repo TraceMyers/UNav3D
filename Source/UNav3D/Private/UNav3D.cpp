@@ -148,14 +148,18 @@ bool FUNav3DModule::PopulateTriMeshes(
 
 	// getting geometry data and populating the TriMeshes with it
 	for (int i = 0; i < TMeshes.Num(); i++) {
-		const GeometryProcessor::GEOPROC_RESPONSE Response = GeomProcessor.PopulateTriMesh(TMeshes[i]);
+		// setting the meshes to overlap in the trace channel used by this plugin
+		Geometry::TriMesh& TMesh = TMeshes[i];
+		TMesh.MeshActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
+		
+		const GeometryProcessor::GEOPROC_RESPONSE Response = GeomProcessor.PopulateTriMesh(TMesh);
 		if (Response == GeometryProcessor::GEOPROC_HIGH_INDEX) {
 			UNAV_GENERR("One of the meshes was not processed correctly due to a bad index coming from the index buffer")
 		}
 		else if (Response == GeometryProcessor::GEOPROC_ALLOC_FAIL) {
 			UNAV_GENERR("The Geometry Processor failed to allocate enough space for a mesh.")
 		}
-		const Geometry::TriMesh& TMesh = TMeshes[i];
+		
 		PRINT_GEOPROC_NEGATIVE_RESPONSE(TMesh, Response)
 		PRINT_TRIMESH_VERTEX_CT(TMesh)
 		DRAW_TRIMESH_VERTICES(World, TMesh);
