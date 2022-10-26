@@ -249,8 +249,9 @@ void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<Geom
 void GeometryProcessor::BuildPolygonsAtMeshIntersections(TArray<TArray<Geometry::TriMesh*>>& Groups) {
 
 	for (int i = 0; i < Groups.Num(); i++) {
-		TArray<TArray<Geometry::UnstructuredPolygon>> UPolys; // one per tri
 		TArray<Geometry::TriMesh*>& Group = Groups[i];
+		TArray<TArray<Geometry::UnstructuredPolygon>> UPolys; // one poly per tri
+		Geometry::PopulateUnstructuredPolygons(Group, UPolys);
 		
 	}
 }

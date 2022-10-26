@@ -85,6 +85,11 @@ namespace Geometry {
 	};
 
 	struct PolyEdge {
+		
+		PolyEdge(const FVector& _A, const FVector& _B) :
+			A{_A}, B{_B}
+		{}
+		
 		FVector A;
 		FVector B;
 	};

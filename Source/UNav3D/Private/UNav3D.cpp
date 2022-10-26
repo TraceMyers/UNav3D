@@ -10,6 +10,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "DebugMarker.h"
 #include "GeometryProcessor.h"
+#include "DrawDebugHelpers.h"
 
 // using the default windows package define; would be better to determine this
 #define _WIN32_WINNT_WIN10_TH2 0
@@ -20,8 +21,6 @@
 #define _WIN32_WINNT_WIN10_RS5 0
 #include <windows.h>
 #include <stdio.h>
-
-#include "DrawDebugHelpers.h"
 
 
 #define LOCTEXT_NAMESPACE "UNav3D"

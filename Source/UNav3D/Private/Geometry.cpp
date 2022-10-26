@@ -523,50 +523,41 @@ namespace Geometry {
 			FVector TruePOI[2][2];
 			int T0HitCt = 0;
 			int T1HitCt = 0;
-			if(Internal_RaycastBidirectional(T0.A, T0.B, T1, PointOfIntersection)) {
+			if (Internal_RaycastBidirectional(T0.A, T0.B, T1, PointOfIntersection)) {
 				TruePOI[0][T0HitCt++] = PointOfIntersection;	
 			}
-			if(Internal_RaycastBidirectional(T0.B, T0.C, T1, PointOfIntersection)) {
+			if (Internal_RaycastBidirectional(T0.B, T0.C, T1, PointOfIntersection)) {
 				TruePOI[0][T0HitCt++] = PointOfIntersection;	
 			}
-			if(T0HitCt < 2 && Internal_RaycastBidirectional(T0.C, T0.A, T1, PointOfIntersection)) {
-				TruePOI[0][T0HitCt++] = PointOfIntersection;	
-			}
-			if(Internal_RaycastBidirectional(T1.A, T1.B, T0, PointOfIntersection)) {
-				TruePOI[1][T1HitCt++] = PointOfIntersection;	
-			}
-			if(Internal_RaycastBidirectional(T1.B, T1.C, T0, PointOfIntersection)) {
-				TruePOI[1][T1HitCt++] = PointOfIntersection;	
-			}
-			if(T1HitCt < 2 && Internal_RaycastBidirectional(T1.C, T1.A, T0, PointOfIntersection)) {
-				TruePOI[1][T1HitCt++] = PointOfIntersection;	
-			}
-			if (T0HitCt == 1) {
-				if (T1HitCt == 1) {
-					
+			if (T0HitCt < 2) {
+				if (Internal_RaycastBidirectional(T0.C, T0.A, T1, PointOfIntersection)) {
+					TruePOI[0][T0HitCt++] = PointOfIntersection;	
 				}
-				else {
-					// bad
+				if(T0HitCt < 2 && Internal_RaycastBidirectional(T1.A, T1.B, T0, PointOfIntersection)) {
+					TruePOI[1][T1HitCt++] = PointOfIntersection;	
 				}
+				if(T0HitCt + T1HitCt < 2 && Internal_RaycastBidirectional(T1.B, T1.C, T0, PointOfIntersection)) {
+					TruePOI[1][T1HitCt++] = PointOfIntersection;	
+				}
+				if(T0HitCt + T1HitCt < 2 && Internal_RaycastBidirectional(T1.C, T1.A, T0, PointOfIntersection)) {
+					TruePOI[1][T1HitCt++] = PointOfIntersection;	
+				}	
+			}
+				
+			if (T0HitCt == 1 && T1HitCt == 1) {
+				const PolyEdge P(TruePOI[0][0], TruePOI[1][0]);
+				PolyA.Edges.Add(P);
+				PolyB.Edges.Add(P);
 			}
 			else if (T0HitCt == 2) {
-				if (T1HitCt == 0) {
-					
-				}
-				else {
-					// bad
-				}
+				const PolyEdge P(TruePOI[0][0], TruePOI[0][1]);	
+				PolyA.Edges.Add(P);
+				PolyB.Edges.Add(P);
 			}
 			else if (T1HitCt == 2) {
-				if (T0HitCt == 0) {
-					
-				}
-				else {
-					// bad
-				}
-			}
-			else {
-				// no hit
+				const PolyEdge P(TruePOI[1][0], TruePOI[1][1]);	
+				PolyA.Edges.Add(P);
+				PolyB.Edges.Add(P);
 			}
 		}
 
