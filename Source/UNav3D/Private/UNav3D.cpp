@@ -82,12 +82,14 @@ void FUNav3DModule::PluginButtonClicked(){
 
 	TArray<Geometry::TriMesh> ReformedTMeshes;
 	GeomProcessor.ReformTriMeshes(World, TMeshes, ReformedTMeshes);
+
+#ifdef UNAV_DBG
 	for (int i = 0; i < TMeshes.Num(); i++) {
 		Geometry::TriMesh& TMesh = TMeshes[i];
-		int j;
-		DRAW_TRIMESH_TRIS(World, TMesh, j)
-		DRAW_TRIMESH_VERTICES(World, TMesh, j);
+		UNavDbg::DrawTriMeshTris(World, TMesh);
+		UNavDbg::DrawTriMeshVertices(World, TMesh);
 	}
+#endif
 
 	// temp to ensure we're not leaking during production
 	for (int i = 0; i < TMeshes.Num(); i++) {
@@ -157,8 +159,6 @@ bool FUNav3DModule::PopulateTriMeshes(
 	}
 	ProgressTask.EnterProgressFrame();
 
-	// DRAW_TRIMESH_BOUNDING_BOXES(World, TMeshes)
-
 	// getting geometry data and populating the TriMeshes with it
 	for (int i = 0; i < TMeshes.Num(); i++) {
 		// setting the meshes to overlap in the trace channel used by this plugin
@@ -172,9 +172,12 @@ bool FUNav3DModule::PopulateTriMeshes(
 		else if (Response == GeometryProcessor::GEOPROC_ALLOC_FAIL) {
 			UNAV_GENERR("The Geometry Processor failed to allocate enough space for a mesh.")
 		}
+
+#ifdef UNAV_DBG
+		UNavDbg::PrintTriMesh(TMesh);
+		UNavDbg::DrawTriMeshBoundingBox(World, TMesh);
+#endif
 		
-		PRINT_GEOPROC_NEGATIVE_RESPONSE(TMesh, Response)
-		PRINT_TRIMESH_VERTEX_CT(TMesh)
 	}
 	ProgressTask.EnterProgressFrame();
 	

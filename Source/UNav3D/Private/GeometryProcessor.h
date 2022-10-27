@@ -25,7 +25,7 @@ public:
 	// Takes Populated TriMeshes, groups them by overlap, and reforms the overlapped meshes into continuous meshes
 	// Populates OutMeshes, Empties InMeshes
 	GEOPROC_RESPONSE ReformTriMeshes(
-		UWorld* World,
+		const UWorld* World,
 		TArray<Geometry::TriMesh>& InMeshes,
 		TArray<Geometry::TriMesh>& OutMeshes
 	);
@@ -48,7 +48,6 @@ private:
 
 	// Group Meshes together if they overlap
 	static void GetIntersectGroups(
-		UWorld* World,
 		TArray<TArray<Geometry::TriMesh*>>& Groups,
 		TArray<Geometry::TriMesh>& InMeshes
 	);

@@ -52,13 +52,13 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(Geometry:
 
 // Does not group Mesh A and Mesh B if Mesh A is entirely inside MeshB, unless Mesh C intersects both
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
-	UWorld* World,
+	const UWorld* World,
 	TArray<Geometry::TriMesh>& InMeshes,
 	TArray<Geometry::TriMesh>& OutMeshes
 ) {
 	OutMeshes.Reserve(InMeshes.Num());
 	TArray<TArray<Geometry::TriMesh*>> IntersectGroups;
-	GetIntersectGroups(World, IntersectGroups, InMeshes);
+	GetIntersectGroups(IntersectGroups, InMeshes);
 
 	for (int i = 0; i < IntersectGroups.Num(); i++) {
 		printf("group {%d}:\n", i + 1);
@@ -163,7 +163,6 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
 }
 
 void GeometryProcessor::GetIntersectGroups(
-	UWorld* World,
 	TArray<TArray<Geometry::TriMesh*>>& Groups,
 	TArray<Geometry::TriMesh>& InMeshes
 ) {
