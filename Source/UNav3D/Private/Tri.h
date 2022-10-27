@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-// Triangle; saves space by storing references to vertices on the TriMesh; stores references to adjacent Tris
+// Triangle; saves space by storing references to vertices on the TriMesh.
 // Edges must be re-pointed if Tri's container reallocates
 struct Tri {
 	
