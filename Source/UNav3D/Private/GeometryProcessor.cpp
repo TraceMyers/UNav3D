@@ -3,6 +3,9 @@
 #include "Rendering/PositionVertexBuffer.h"
 #include "RenderingThread.h"
 #include "Engine/StaticMeshActor.h"
+#include "TriMesh.h"
+#include "Tri.h"
+#include "Polygon.h"
 
 // TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until...
 // TODO: ... there is a good system in place to take that input from the user
@@ -11,7 +14,7 @@ GeometryProcessor::GeometryProcessor() {}
 
 GeometryProcessor::~GeometryProcessor() {}
 
-GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(Geometry::TriMesh& TMesh, bool DoTransform) const {
+GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(TriMesh& TMesh, bool DoTransform) const {
 	// forcing CPU access to the mesh seems like the most user-friendly option
 	UStaticMesh* StaticMesh = TMesh.MeshActor->GetStaticMeshComponent()->GetStaticMesh();
 	StaticMesh->bAllowCPUAccess = true;
@@ -53,11 +56,11 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(Geometry:
 // Does not group Mesh A and Mesh B if Mesh A is entirely inside MeshB, unless Mesh C intersects both
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
 	const UWorld* World,
-	TArray<Geometry::TriMesh>& InMeshes,
-	TArray<Geometry::TriMesh>& OutMeshes
+	TArray<TriMesh>& InMeshes,
+	TArray<TriMesh>& OutMeshes
 ) {
 	OutMeshes.Reserve(InMeshes.Num());
-	TArray<TArray<Geometry::TriMesh*>> IntersectGroups;
+	TArray<TArray<TriMesh*>> IntersectGroups;
 	GetIntersectGroups(IntersectGroups, InMeshes);
 
 	for (int i = 0; i < IntersectGroups.Num(); i++) {
@@ -104,7 +107,7 @@ uint16* GeometryProcessor::GetIndices(const FStaticMeshLODResources& LOD, uint32
 
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::GetVertices(
 	const FStaticMeshLODResources& LOD,
-	Geometry::TriMesh& TMesh,
+	TriMesh& TMesh,
 	uint32& VertexCt
 ) const {
 	VertexCt = LOD.VertexBuffers.PositionVertexBuffer.GetNumVertices();
@@ -134,7 +137,7 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::GetVertices(
 }
 
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
-	Geometry::TriMesh& TMesh,
+	TriMesh& TMesh,
 	uint16* Indices,
 	uint32 IndexCt,
 	uint32 VertexCt
@@ -154,7 +157,7 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
 		const FVector& A = Vertices[*IndexPtr++];
 		const FVector& B = Vertices[*IndexPtr++];
 		const FVector& C = Vertices[*IndexPtr++];
-		Geometry::Tri T(A, B, C);
+		Tri T(A, B, C);
 		TMesh.Tris.Add(T);
 	}
 	TMesh.VertexCt = VertexCt;
@@ -163,8 +166,8 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
 }
 
 void GeometryProcessor::GetIntersectGroups(
-	TArray<TArray<Geometry::TriMesh*>>& Groups,
-	TArray<Geometry::TriMesh>& InMeshes
+	TArray<TArray<TriMesh*>>& Groups,
+	TArray<TriMesh>& InMeshes
 ) {
 	const int InMeshCt = InMeshes.Num();
 	TArray<int> GroupIndices;
@@ -173,12 +176,12 @@ void GeometryProcessor::GetIntersectGroups(
 	TArray<int> PotentialIntersectIndices;
 	TArray<int> IntersectIndices;
 	for (int i = 0; i < InMeshCt - 1; i++) {
-		Geometry::TriMesh& TMeshA = InMeshes[i];
+		TriMesh& TMeshA = InMeshes[i];
 		
 		// if the TMesh already belongs to a group, get the group, otherwise make a group
 		int GrpIndex = GroupIndices[i];
 		if (GrpIndex == -1) {
-			GrpIndex = Groups.Add(TArray<Geometry::TriMesh*>());
+			GrpIndex = Groups.Add(TArray<TriMesh*>());
 			GroupIndices[i] = GrpIndex;
 		}
 		
@@ -189,7 +192,7 @@ void GeometryProcessor::GetIntersectGroups(
 			if (OtherGrpIndex == GrpIndex) {
 				continue;
 			}
-			Geometry::TriMesh& TMeshB = InMeshes[j];
+			TriMesh& TMeshB = InMeshes[j];
 			if (Geometry::DoBoundingBoxesOverlap(TMeshA.Box, TMeshB.Box)) {
 				PotentialIntersectIndices.Add(j);
 			}
@@ -220,7 +223,7 @@ void GeometryProcessor::GetIntersectGroups(
 	// the very last mesh may be an island (no overlaps)
 	const int EndIndex = InMeshCt - 1;
 	if (GroupIndices[EndIndex] == -1) {
-		GroupIndices[EndIndex] = Groups.Add(TArray<Geometry::TriMesh*>());
+		GroupIndices[EndIndex] = Groups.Add(TArray<TriMesh*>());
 	}
 
 	// populate groups with known group indices
@@ -230,38 +233,38 @@ void GeometryProcessor::GetIntersectGroups(
 	}
 }
 
-void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<Geometry::TriMesh*>>& Groups) {
+void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<TriMesh*>>& Groups) {
 	for (int i = 0; i < Groups.Num(); i++) {
-		TArray<Geometry::TriMesh*>& Group = Groups[i];
+		TArray<TriMesh*>& Group = Groups[i];
 		FVector GroupBBoxMin;
 		FVector GroupBBoxMax;
 		Geometry::GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
 		for (int j = 0; j < Group.Num(); j++) {
-			Geometry::TriMesh* CurTMesh = Group[j];
-			TArray<Geometry::TriMesh*> OtherTMeshes = Group;
+			TriMesh* CurTMesh = Group[j];
+			TArray<TriMesh*> OtherTMeshes = Group;
 			OtherTMeshes.Remove(CurTMesh);
 			Geometry::FlagObscuredTris(World, *CurTMesh, OtherTMeshes, GroupBBoxMin);
 		}
 	}
 }
 
-void GeometryProcessor::BuildPolygonsAtMeshIntersections(TArray<TArray<Geometry::TriMesh*>>& Groups) {
+void GeometryProcessor::BuildPolygonsAtMeshIntersections(TArray<TArray<TriMesh*>>& Groups) {
 
 	for (int i = 0; i < Groups.Num(); i++) {
 		
-		TArray<Geometry::TriMesh*>& Group = Groups[i];
-		TArray<TArray<Geometry::UnstructuredPolygon>> UPolys; // one poly per tri
+		TArray<TriMesh*>& Group = Groups[i];
+		TArray<TArray<UnstructuredPolygon>> UPolys; // one poly per tri
 
 		Geometry::PopulateUnstructuredPolygons(Group, UPolys);
 		
 		for (int j = 0; j < UPolys.Num(); j++) {
-			TArray<Geometry::UnstructuredPolygon>& MeshUPolys = UPolys[j];
-			Geometry::TriMesh& TMesh = *Group[j];
-			TArray<Geometry::Polygon> TMeshPolygons;
+			TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
+			TriMesh& TMesh = *Group[j];
+			TArray<Polygon> TMeshPolygons;
 			
 			for (int k = 0; k < MeshUPolys.Num(); k++) {
-				const Geometry::UnstructuredPolygon& UPoly = MeshUPolys[k];
-				Geometry::Tri& T = TMesh.Tris[k];
+				const UnstructuredPolygon& UPoly = MeshUPolys[k];
+				Tri& T = TMesh.Tris[k];
 				
 				if (UPoly.Edges.Num() == 0) {
 					// if there are no intersections...
@@ -278,8 +281,8 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(TArray<TArray<Geometry:
 
 				// each tri might come out with more than one polygon; for example, a set of intersections in the center
 				// of the tri that do not touch tri edges - one outside, one inside
-				TArray<Geometry::Polygon> BuildingPolygons;
-				BuildingPolygons.Add(Geometry::Polygon(k));
+				TArray<Polygon> BuildingPolygons;
+				BuildingPolygons.Add(Polygon(k));
 				
 			}
 		}

@@ -20,6 +20,7 @@ class FToolBarBuilder;
 class FMenuBuilder;
 class FUICommandList;
 class AUNav3DBoundsVolume;
+struct TriMesh;
 
 class FUNav3DModule : public IModuleInterface {
 	
@@ -40,7 +41,7 @@ private:
 	bool SetBoundsVolume();
 
 	// Takes meshes found inside bounds volume and populates TriMeshes with their data
-	bool PopulateTriMeshes(UWorld* World, TArray<Geometry::TriMesh>& TriMeshes, FScopedSlowTask& ProgressTask) const;
+	bool PopulateTriMeshes(UWorld* World, TArray<TriMesh>& TriMeshes, FScopedSlowTask& ProgressTask) const;
 	
 	TSharedPtr<FUICommandList> PluginCommands;
 	AUNav3DBoundsVolume* BoundsVolume;

@@ -4,23 +4,26 @@
 #include "DebugMarker.h"
 #include "CoreMinimal.h"
 #include "DrawDebugHelpers.h"
+#include "TriMesh.h"
+#include "Tri.h"
+#include "Polygon.h"
 
-void UNavDbg::PrintTriMesh(const Geometry::TriMesh& TMesh) {
+void UNavDbg::PrintTriMesh(const TriMesh& TMesh) {
 	printf(
 		"Bounds Volume found Mesh %s with %d vertices and %d tris.\n", 
 		TCHAR_TO_ANSI(*TMesh.MeshActor->GetName()), TMesh.VertexCt, TMesh.Tris.Num()
 	);
 }
 
-void UNavDbg::PrintTriMeshMulti(const TArray<Geometry::TriMesh>& TMeshes) {
+void UNavDbg::PrintTriMeshMulti(const TArray<TriMesh>& TMeshes) {
 	for (int i = 0; i < TMeshes.Num(); i++) {
-		const Geometry::TriMesh& TMesh = TMeshes[i];
+		const TriMesh& TMesh = TMeshes[i];
 		PrintTriMesh(TMesh);
 	}  
 }
 
-void UNavDbg::DrawTriMeshBoundingBox(UWorld* World, const Geometry::TriMesh& TMesh) {
-	for (int j = 0; j < Geometry::RECT_PRISM_PTS; j++) { 
+void UNavDbg::DrawTriMeshBoundingBox(UWorld* World, const TriMesh& TMesh) {
+	for (int j = 0; j < BoundingBox::VERTEX_CT; j++) { 
 		ADebugMarker::Spawn(World, TMesh.Box.Vertices[j], DBG_DRAW_TIME);
 	} 
 	constexpr int StartIndices [4] {0, 4, 5, 6};  
@@ -42,14 +45,14 @@ void UNavDbg::DrawTriMeshBoundingBox(UWorld* World, const Geometry::TriMesh& TMe
 	}
 }
 
-void UNavDbg::DrawTriMeshBoundingBoxMulti(UWorld* World, const TArray<Geometry::TriMesh>& TMeshes) {
+void UNavDbg::DrawTriMeshBoundingBoxMulti(UWorld* World, const TArray<TriMesh>& TMeshes) {
 	for (int i = 0; i < TMeshes.Num(); i++) {
-		const Geometry::TriMesh& TMesh = TMeshes[i];
+		const TriMesh& TMesh = TMeshes[i];
 		DrawTriMeshBoundingBox(World, TMesh);
 	}  
 }
 
-void UNavDbg::DrawTriMeshVertices(const UWorld* World, const Geometry::TriMesh& TMesh) {
+void UNavDbg::DrawTriMeshVertices(const UWorld* World, const TriMesh& TMesh) {
 	for (int i = 0; i < TMesh.VertexCt; i++) { 
 		DrawDebugCircle(
 			World,
@@ -63,14 +66,14 @@ void UNavDbg::DrawTriMeshVertices(const UWorld* World, const Geometry::TriMesh& 
 	}
 }
 
-void UNavDbg::DrawTriMeshVerticesMulti(const UWorld* World, const TArray<Geometry::TriMesh>& TMeshes) {
+void UNavDbg::DrawTriMeshVerticesMulti(const UWorld* World, const TArray<TriMesh>& TMeshes) {
 	for (int i = 0; i < TMeshes.Num(); i++) {
-		const Geometry::TriMesh& TMesh = TMeshes[i];
+		const TriMesh& TMesh = TMeshes[i];
 		DrawTriMeshVertices(World, TMesh);
 	}  
 }
 
-void UNavDbg::DrawTriMeshTris(const UWorld* World, const Geometry::TriMesh& TMesh) {
+void UNavDbg::DrawTriMeshTris(const UWorld* World, const TriMesh& TMesh) {
 	const auto& Tris = TMesh.Tris; 
 	for (int i = 0; i < Tris.Num(); i++) {
 		const auto& Tri = Tris[i];
@@ -104,9 +107,9 @@ void UNavDbg::DrawTriMeshTris(const UWorld* World, const Geometry::TriMesh& TMes
 	}
 }
 
-void UNavDbg::DrawTriMeshTrisMulti(const UWorld* World, const TArray<Geometry::TriMesh>& TMeshes) {
+void UNavDbg::DrawTriMeshTrisMulti(const UWorld* World, const TArray<TriMesh>& TMeshes) {
 	for (int i = 0; i < TMeshes.Num(); i++) {
-		const Geometry::TriMesh& TMesh = TMeshes[i];
+		const TriMesh& TMesh = TMeshes[i];
 		DrawTriMeshTris(World, TMesh);
 	}  
 }

@@ -3,11 +3,11 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "Geometry.h"
+#include "TriMesh.h"
 #include "UNav3DBoundsVolume.generated.h"
 
 class GeometryProcessor;
 class UBoxComponent;
-
 
 UCLASS()
 class UNAV3D_API AUNav3DBoundsVolume : public AActor {
@@ -19,10 +19,10 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	
 	// Returns any Static Mesh whose *bounding box extents* overlap BoundsBox
-	void GetOverlappingMeshes(TArray<Geometry::TriMesh>& Meshes);
+	void GetOverlappingMeshes(TArray<TriMesh>& Meshes);
 
 	// fills OutVertices with any tri indices in TMesh that are also inside the bounds volume
-	void GetInnerTris(const Geometry::TriMesh& TMesh, TArray<int>& OutIndices) const;
+	void GetInnerTris(const TriMesh& TMesh, TArray<int>& OutIndices) const;
 
 #ifdef UNAV_BNDVOL_DBG
 	const FVector* GetVertices() const;
@@ -41,6 +41,6 @@ protected:
 private:
 	
 	// To check for overlaps with static meshes
-	Geometry::BoundingBox OverlapBBox;
+	BoundingBox OverlapBBox;
 
 };

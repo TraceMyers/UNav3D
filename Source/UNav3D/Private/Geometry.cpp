@@ -1,113 +1,19 @@
 ﻿#include "Geometry.h"
+#include "TriMesh.h"
+#include "Tri.h"
+#include "Polygon.h"
 #include "Components/BoxComponent.h"
 #include "Engine/StaticMeshActor.h"
 
 namespace Geometry {
 	
-	enum TRI_FLAGS {
-		TRI_A_OBSCURED =	0x0001,
-		TRI_B_OBSCURED =	0x0002,
-		TRI_C_OBSCURED =	0x0004,
-		TRI_CULL =			0x0008,
-		TRI_PROBLEM_CASE =	0x0010
-	};
-	
-	Tri::Tri(const FVector& _A, const FVector& _B, const FVector& _C) :
-		A(_A), B(_B), C(_C),
-		Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
-		Flags(0x0),
-		LongestSidelen(GetLongestTriSidelen(_A, _B, _C)),
-		Area(GetArea(_A, _B, _C))
-	{}
-
-	float Tri::GetLongestTriSidelen(const FVector& A, const FVector& B, const FVector& C) {
-		const float AB = (A - B).Size();
-		const float BC = (B - C).Size();
-		const float CA = (C - A).Size();
-		if (AB > BC) {
-			if (AB > CA) {
-				return AB;
-			}
-			return CA;
-		}
-		if (BC > CA) {
-			return BC;
-		}
-		return CA;
-	}
-
-	float Tri::GetArea(const FVector& A, const FVector& B, const FVector& C) {
-		return FVector::CrossProduct(A - B, A - C).Size() * 0.5f;
-	}
-	
-	float Tri::GetArea(const Tri& T) {
-		return FVector::CrossProduct(T.A - T.B, T.A - T.C).Size() * 0.5f;
-	}
-
-	bool Tri::IsAObscured() const {
-		return Flags & TRI_A_OBSCURED;
-	}
-
-	bool Tri::IsBObscured() const {
-		return Flags & TRI_B_OBSCURED;
-	}
-
-	bool Tri::IsCObscured() const {
-		return Flags & TRI_C_OBSCURED;
-	}
-
-	bool Tri::AnyObscured() const {
-		return IsAObscured() || IsBObscured() || IsCObscured();
-	}
-
-	bool Tri::AllObscured() const {
-		return IsAObscured() && IsBObscured() && IsCObscured();
-	}
-
-	void Tri::MarkForCull() {
-		Flags |= TRI_CULL;
-	}
-
-	void Tri::MarkProblemCase() {
-		Flags |= TRI_PROBLEM_CASE;
-	}
-
-	TriMesh::TriMesh() :
-		MeshActor(nullptr),
-		Box(),
-		VertexCt(0),
-		Vertices(nullptr)
-	{}
-
-	TriMesh::TriMesh(const TriMesh& OtherMesh) {
-		memcpy(this, &OtherMesh, sizeof(TriMesh));
-	}
-	
-	TriMesh::~TriMesh() {
-		if (Vertices != nullptr) {
-			delete Vertices;
-			Vertices = nullptr;
-		}
-	}
-
-	// checking of the mesh actors are the same provides a tiny bit of debugging value
-	bool TriMesh::operator == (const TriMesh& OtherMesh) const {
-		return this->MeshActor == OtherMesh.MeshActor;	
-	}
-
-	void TriMesh::ResetVertexData() {
-		VertexCt = 0;
-		if (Vertices != nullptr) {
-			delete Vertices;
-			Vertices = nullptr;
-		}
-		Tris.Empty(32);
-	}
+	static constexpr float ONE_THIRD = 1.0f / 3.0f;
+	static constexpr float NEAR_EPSILON = 1e-4f;
 
 	namespace {
 
 		// The unscaled/unrotated/untranslated vertices of a bounding box
-		const FVector BaseExtent[RECT_PRISM_PTS] {
+		const FVector BaseExtent[BoundingBox::VERTEX_CT] {
 			FVector(-1.0f, -1.0f, -1.0f), // neighbors 1, 2, 3
 			FVector( 1.0f, -1.0f, -1.0f),
 			FVector(-1.0f,  1.0f, -1.0f),
@@ -118,12 +24,12 @@ namespace Geometry {
 			FVector( 1.0f,  1.0f,  1.0f)
 		};
 		
-		constexpr int BBoxFaceIndices[RECT_PRISM_FACES][3] {
+		constexpr int BBoxFaceIndices[BoundingBox::FACE_CT][3] {
 			{0, 1, 2}, {0, 1, 3}, {0, 2, 3},
 			{7, 4, 5}, {7, 5, 6}, {7, 4, 6}
 		};
 
-		constexpr int BBoxEdgeIndices[RECT_PRISM_EDGES][2] {
+		constexpr int BBoxEdgeIndices[BoundingBox::EDGE_CT][2] {
 			{0, 1}, {0, 2}, {1, 4}, {2, 4},
 			{3, 5}, {3, 6}, {7, 5}, {7, 6},
 			{1, 5}, {4, 7}, {2, 6}, {0, 3}
@@ -172,10 +78,6 @@ namespace Geometry {
 				MeshToCt[MeshActor] += 1;
 			}
 
-			bool IsOdd(const AStaticMeshActor* MeshActor) {
-				return MeshToCt[MeshActor] % 2 == 1;
-			}
-
 			bool AnyOdd() {
 				for (int i = 0; i < Keys.Num(); i++) {
 					if (MeshToCt[Keys[i]] % 2 == 1) {
@@ -211,17 +113,17 @@ namespace Geometry {
 			bool IsStaticMesh
 		) {
 			if (IsStaticMesh) {
-				for (int i = 0; i < RECT_PRISM_PTS; i++) {
+				for (int i = 0; i < BoundingBox::VERTEX_CT; i++) {
 					const FVector RotatedCenter = TForm.TransformVector(Center);
 					BBox.Vertices[i] = TForm.TransformPosition(BaseExtent[i] * Extent) + RotatedCenter;
 				}
 			}
 			else {
-				for (int i = 0; i < RECT_PRISM_PTS; i++) {
+				for (int i = 0; i < BoundingBox::VERTEX_CT; i++) {
 					BBox.Vertices[i] = TForm.TransformPositionNoScale(BaseExtent[i] * Extent);
 				}
 			}
-			for (int i = 0; i < RECT_PRISM_FACES; i++) {
+			for (int i = 0; i < BoundingBox::FACE_CT; i++) {
 				const int* SideFaceIndices = BBoxFaceIndices[i];
 				const FVector& VertA = BBox.Vertices[SideFaceIndices[0]];
 				const FVector& VertB = BBox.Vertices[SideFaceIndices[1]];
@@ -356,7 +258,7 @@ namespace Geometry {
 			Dir *= 1.0f / Length;
 			const FVector* Origin = &LSA;
 			for (int i = 0; i < 2; i++) {
-				for (int j = 0; j < RECT_PRISM_FACES; j++) {
+				for (int j = 0; j < BoundingBox::FACE_CT; j++) {
 					const int* FaceIndices = BBoxFaceIndices[j];
 					const FVector& FaceA = BBox.Vertices[FaceIndices[0]];
 					const FVector& FaceB = BBox.Vertices[FaceIndices[1]];
@@ -402,7 +304,7 @@ namespace Geometry {
 			for (int i = 0; i < 2; i++) {
 				const BoundingBox& EdgesBox = *EdgesBoxPtr;
 				const BoundingBox& FacesBox = *FacesBoxPtr;
-				for (int j = 0; j < RECT_PRISM_EDGES; j++) {
+				for (int j = 0; j < BoundingBox::EDGE_CT; j++) {
 					const int* EdgeIndices = BBoxEdgeIndices[j];
 					const FVector EdgeA = EdgesBox.Vertices[EdgeIndices[0]];
 					const FVector EdgeB = EdgesBox.Vertices[EdgeIndices[1]];
@@ -503,16 +405,15 @@ namespace Geometry {
 			MeshHitCounter& MHitCtr
 		) {
 			if (Internal_IsPointObscured(World, Params, T.A, MinZ, MHitCtr)) {
-				T.Flags |= TRI_A_OBSCURED;
+				T.SetAObscured();
 			}
 			if (Internal_IsPointObscured(World, Params, T.B, MinZ, MHitCtr)) {
-				T.Flags |= TRI_B_OBSCURED;
+				T.SetBObscured();
 			}
 			if (Internal_IsPointObscured(World, Params, T.C, MinZ, MHitCtr)) {
-				T.Flags |= TRI_C_OBSCURED;	
+				T.SetCObscured();
 			}
-			constexpr uint32 OBSCURED = TRI_A_OBSCURED | TRI_B_OBSCURED | TRI_C_OBSCURED;
-			return T.Flags & OBSCURED;
+			return T.AnyObscured();
 		}
 
 		void Internal_GetTriPairPolyEdges(
@@ -585,7 +486,7 @@ namespace Geometry {
 			}
 		}
 	}
-	
+
 	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor) {
 		const FBox MeshFBox = MeshActor->GetStaticMeshComponent()->GetStaticMesh()->GetBoundingBox();
 		const FVector Extent = MeshFBox.GetExtent();
@@ -601,12 +502,12 @@ namespace Geometry {
 	}
 
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB) {
-		for (int i = 0; i < RECT_PRISM_PTS; i++) {
+		for (int i = 0; i < BoundingBox::VERTEX_CT; i++) {
 			if (Internal_IsPointInsideBox(BBoxA, BBoxB.Vertices[i])) {
 				return true;
 			}
 		}
-		for (int i = 0; i < RECT_PRISM_PTS; i++) {
+		for (int i = 0; i < BoundingBox::VERTEX_CT; i++) {
 			if (Internal_IsPointInsideBox(BBoxB, BBoxA.Vertices[i])) {
 				return true;
 			}
@@ -649,7 +550,7 @@ namespace Geometry {
 		Max = Min;
 		for (int i = 0; i < TMeshCt; i++) {
 			const FVector* BoxVerts = TMeshes[i]->Box.Vertices;
-			for (int j = 0; j < RECT_PRISM_PTS; j++) {
+			for (int j = 0; j < BoundingBox::VERTEX_CT; j++) {
 				const FVector& Vertex = BoxVerts[j];
 				if (Vertex.X < Min.X) {
 					Min.X = Vertex.X;

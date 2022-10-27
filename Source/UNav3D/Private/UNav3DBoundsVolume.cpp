@@ -28,7 +28,7 @@ void AUNav3DBoundsVolume::Tick(float DeltaTime) {
 	Super::Tick(DeltaTime);
 }
 
-void AUNav3DBoundsVolume::GetOverlappingMeshes(TArray<Geometry::TriMesh>& Meshes) {
+void AUNav3DBoundsVolume::GetOverlappingMeshes(TArray<TriMesh>& Meshes) {
 	Meshes.Empty(32);
 	
 	if (GEditor == nullptr || GEditor->GetEditorWorldContext().World() == nullptr) {
@@ -58,7 +58,7 @@ void AUNav3DBoundsVolume::GetOverlappingMeshes(TArray<Geometry::TriMesh>& Meshes
 			continue;	
 		}
 
-		Geometry::TriMesh TMesh;
+		TriMesh TMesh;
 		TMesh.MeshActor = FoundMesh;
 		Geometry::SetBoundingBox(TMesh.Box, FoundMesh);
 		// DoBoundingBoxesOverlap() checks if B pts are in A first, so this order is helpful for resolving positive
@@ -69,7 +69,7 @@ void AUNav3DBoundsVolume::GetOverlappingMeshes(TArray<Geometry::TriMesh>& Meshes
 	}
 }
 
-void AUNav3DBoundsVolume::GetInnerTris(const Geometry::TriMesh& TMesh, TArray<int>& OutIndices) const {
+void AUNav3DBoundsVolume::GetInnerTris(const TriMesh& TMesh, TArray<int>& OutIndices) const {
 	
 }
 

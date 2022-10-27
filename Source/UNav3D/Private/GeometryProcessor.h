@@ -2,9 +2,7 @@
 
 
 class UStaticMesh;
-namespace Geometry {
-	struct TriMesh;	
-}
+struct TriMesh;	
 
 class GeometryProcessor {
 	
@@ -20,14 +18,14 @@ public:
 	~GeometryProcessor();
 	
 	// Pulls Static Mesh data and populates TMesh with it. If TForm != nullptr, it will be used to transform the vertices
-	GEOPROC_RESPONSE PopulateTriMesh(Geometry::TriMesh& TMesh, bool DoTransform=true) const;
+	GEOPROC_RESPONSE PopulateTriMesh(TriMesh& TMesh, bool DoTransform=true) const;
 
 	// Takes Populated TriMeshes, groups them by overlap, and reforms the overlapped meshes into continuous meshes
 	// Populates OutMeshes, Empties InMeshes
 	GEOPROC_RESPONSE ReformTriMeshes(
 		const UWorld* World,
-		TArray<Geometry::TriMesh>& InMeshes,
-		TArray<Geometry::TriMesh>& OutMeshes
+		TArray<TriMesh>& InMeshes,
+		TArray<TriMesh>& OutMeshes
 	);
 
 private:
@@ -36,11 +34,11 @@ private:
 	uint16* GetIndices(const FStaticMeshLODResources& LOD, uint32& IndexCt) const;
 	
 	// Copies the vertex buffer of the mesh into TMesh.Vertices
-	GEOPROC_RESPONSE GetVertices(const FStaticMeshLODResources& LOD, Geometry::TriMesh& TMesh, uint32& VertexCt) const;
+	GEOPROC_RESPONSE GetVertices(const FStaticMeshLODResources& LOD, TriMesh& TMesh, uint32& VertexCt) const;
 	
 	// Populates TMesh with Tris given the previously filled vertex and index buffers
 	static GEOPROC_RESPONSE Populate(
-		Geometry::TriMesh& TMesh,
+		TriMesh& TMesh,
 		uint16* Indices,
 		uint32 IndexCt,
 		uint32 VertexCt
@@ -48,14 +46,14 @@ private:
 
 	// Group Meshes together if they overlap
 	static void GetIntersectGroups(
-		TArray<TArray<Geometry::TriMesh*>>& Groups,
-		TArray<Geometry::TriMesh>& InMeshes
+		TArray<TArray<TriMesh*>>& Groups,
+		TArray<TriMesh>& InMeshes
 	);
 
 	// Any tris that have vertices inside other meshes have those vertices flagged
-	static void FlagObscuredTris(const UWorld* World, TArray<TArray<Geometry::TriMesh*>>& Groups);
+	static void FlagObscuredTris(const UWorld* World, TArray<TArray<TriMesh*>>& Groups);
 
-	void BuildPolygonsAtMeshIntersections(TArray<TArray<Geometry::TriMesh*>>& Groups);
+	void BuildPolygonsAtMeshIntersections(TArray<TArray<TriMesh*>>& Groups);
 	
 };
 

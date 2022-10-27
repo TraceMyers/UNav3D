@@ -11,6 +11,7 @@
 #include "DebugMarker.h"
 #include "GeometryProcessor.h"
 #include "DrawDebugHelpers.h"
+#include "TriMesh.h"
 
 // using the default windows package define; would be better to determine this
 #define _WIN32_WINNT_WIN10_TH2 0
@@ -68,7 +69,6 @@ void FUNav3DModule::PluginButtonClicked(){
 	if (!SetBoundsVolume()) {
 		return;
 	}
-	printf("size of polygon: %lu", (unsigned long)sizeof(Geometry::Polygon));
 
 	// starting up progress bar
 	constexpr int TotalCalls = 2;
@@ -76,17 +76,17 @@ void FUNav3DModule::PluginButtonClicked(){
 	ProgressTask.MakeDialog(true);
 
 	// populate TriMeshes with vertices, tris
-	TArray<Geometry::TriMesh> TMeshes;
+	TArray<TriMesh> TMeshes;
 	if (!PopulateTriMeshes(World, TMeshes, ProgressTask)) {
 		return;
 	}
 
-	TArray<Geometry::TriMesh> ReformedTMeshes;
+	TArray<TriMesh> ReformedTMeshes;
 	GeomProcessor.ReformTriMeshes(World, TMeshes, ReformedTMeshes);
 
 #ifdef UNAV_DBG
 	for (int i = 0; i < TMeshes.Num(); i++) {
-		Geometry::TriMesh& TMesh = TMeshes[i];
+		TriMesh& TMesh = TMeshes[i];
 		UNavDbg::DrawTriMeshTris(World, TMesh);
 		UNavDbg::DrawTriMeshVertices(World, TMesh);
 	}
@@ -149,7 +149,7 @@ bool FUNav3DModule::SetBoundsVolume() {
 
 bool FUNav3DModule::PopulateTriMeshes(
 	UWorld* World,
-	TArray<Geometry::TriMesh>& TMeshes,
+	TArray<TriMesh>& TMeshes,
 	FScopedSlowTask& ProgressTask
 ) const {
 	// find overlapping static mesh actors
@@ -163,7 +163,7 @@ bool FUNav3DModule::PopulateTriMeshes(
 	// getting geometry data and populating the TriMeshes with it
 	for (int i = 0; i < TMeshes.Num(); i++) {
 		// setting the meshes to overlap in the trace channel used by this plugin
-		Geometry::TriMesh& TMesh = TMeshes[i];
+		TriMesh& TMesh = TMeshes[i];
 		TMesh.MeshActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
 		
 		const GeometryProcessor::GEOPROC_RESPONSE Response = GeomProcessor.PopulateTriMesh(TMesh);
