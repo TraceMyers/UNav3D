@@ -164,7 +164,6 @@ bool FUNav3DModule::PopulateTriMeshes(
 	for (int i = 0; i < TMeshes.Num(); i++) {
 		// setting the meshes to overlap in the trace channel used by this plugin
 		TriMesh& TMesh = TMeshes[i];
-		TMesh.MeshActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(ECC_GameTraceChannel1, ECR_Overlap);
 		
 		const GeometryProcessor::GEOPROC_RESPONSE Response = GeomProcessor.PopulateTriMesh(TMesh);
 		if (Response == GeometryProcessor::GEOPROC_HIGH_INDEX) {

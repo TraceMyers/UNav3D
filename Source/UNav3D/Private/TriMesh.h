@@ -16,7 +16,7 @@ struct BoundingBox {
 	FVector FaceNormals[FACE_CT];
 	FVector OverlapCheckVectors[3];
 	float OverlapCheckSqMags[3];
-	
+	float DiagDistance; // distance diagonally from vertex 0 to vertex 7
 };
 
 // Mesh made of Tris, vertices populated from GPU vertex buffer.

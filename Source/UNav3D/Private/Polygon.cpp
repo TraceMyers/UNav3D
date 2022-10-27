@@ -1,21 +1,29 @@
 ﻿#include "Polygon.h"
 
-enum POLYEDGE_FLAGS {
-	A_OK =	0x0001,
-	B_OK =	0x0002,
-};
-	
-	
-PolyEdge::PolyEdge(const FVector& _A, const FVector& _B) :
-	A(_A), B(_B), Flags(0xffff)	
+static constexpr int ONE_BYTE = 8;
+
+PolyEdge::PolyEdge(const FVector& _A, const FVector& _B, uint16 TriEdgeFlags) :
+	A(_A), B(_B), Flags(A_OK | B_OK | TriEdgeFlags)	
 {}
 
-bool PolyEdge::GetAOk() const {
+bool PolyEdge::IsAOk() const {
 	return Flags & A_OK;	
 }
 
-bool PolyEdge::GetBOk() const {
+bool PolyEdge::IsBOk() const {
 	return Flags & B_OK;	
+}
+
+bool PolyEdge::IsOnTriEdgeAB() const {
+	return Flags & ON_EDGE_AB;	
+}
+
+bool PolyEdge::IsOnTriEdgeBC() const {
+	return Flags & ON_EDGE_BC;	
+}
+
+bool PolyEdge::IsOnTriEdgeCA() const {
+	return Flags & ON_EDGE_CA;	
 }
 
 void PolyEdge::SetANotOk() {
@@ -25,3 +33,8 @@ void PolyEdge::SetANotOk() {
 void PolyEdge::SetBNotOk() {
 	Flags &= ~B_OK;	
 }
+
+void PolyEdge::FlipTriEdgeFlags() {
+	Flags = (Flags & VERTEX_FLAGS) | ((Flags & EDGE_FLAGS) << ONE_BYTE) | ((Flags & OTHER_EDGE_FLAGS) >> ONE_BYTE);
+}
+

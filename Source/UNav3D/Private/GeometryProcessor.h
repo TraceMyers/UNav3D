@@ -53,7 +53,7 @@ private:
 	// Any tris that have vertices inside other meshes have those vertices flagged
 	static void FlagObscuredTris(const UWorld* World, TArray<TArray<TriMesh*>>& Groups);
 
-	void BuildPolygonsAtMeshIntersections(TArray<TArray<TriMesh*>>& Groups);
+	void BuildPolygonsAtMeshIntersections(const UWorld* World, TArray<TArray<TriMesh*>>& Groups);
 	
 };
 

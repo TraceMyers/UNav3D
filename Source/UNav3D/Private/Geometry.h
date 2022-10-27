@@ -34,14 +34,16 @@ namespace Geometry {
 	void FlagObscuredTris(
 		const UWorld* World,
 		TriMesh& TMesh,
-		const TArray<TriMesh*>& OtherTMeshes,
+		TArray<TriMesh*>& OtherTMeshes,
 		const FVector& GroupExtMin // group bounding box extrema min
 	);
 
 	// 
 	void PopulateUnstructuredPolygons(
+		const UWorld* World,
 		TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& UPolys
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
+		const float BBoxDiagDist 
 	);
 	
 }

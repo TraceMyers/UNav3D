@@ -1,5 +1,4 @@
 ﻿#include "Debug.h"
-#include "Geometry.h"
 #include "Engine/StaticMeshActor.h"
 #include "DebugMarker.h"
 #include "CoreMinimal.h"
@@ -29,7 +28,7 @@ void UNavDbg::DrawTriMeshBoundingBox(UWorld* World, const TriMesh& TMesh) {
 	constexpr int StartIndices [4] {0, 4, 5, 6};  
 	constexpr int EndIndices [4][3] {{1, 2, 3}, {1, 2, 7}, {1, 3, 7}, {2, 3, 7}};  
 	const FVector* Vertices = TMesh.Box.Vertices;  
-	for (int j = 0; j < 4; j++) {  
+	for (int j = 0; j < 4; j++) {
 		for (int k = 0; k < 3; k++) { 
 			DrawDebugLine(
 				World,
@@ -112,4 +111,16 @@ void UNavDbg::DrawTriMeshTrisMulti(const UWorld* World, const TArray<TriMesh>& T
 		const TriMesh& TMesh = TMeshes[i];
 		DrawTriMeshTris(World, TMesh);
 	}  
+}
+
+void UNavDbg::PrintTriMeshIntersectGroups(const TArray<TArray<TriMesh*>> IntersectGroups) {
+	for (int i = 0; i < IntersectGroups.Num(); i++) {
+		printf("group {%d}:\n", i + 1);
+		auto& IntersectGroup = IntersectGroups[i];
+		for (int j = 0; j < IntersectGroup.Num(); j++) {
+			const auto TMesh = IntersectGroup[j];
+			printf("TMesh: %s\n", TCHAR_TO_ANSI(*TMesh->MeshActor->GetName()));
+		}
+		putchar('\n');
+	}
 }

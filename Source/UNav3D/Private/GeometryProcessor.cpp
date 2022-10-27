@@ -6,6 +6,7 @@
 #include "TriMesh.h"
 #include "Tri.h"
 #include "Polygon.h"
+#include "Debug.h"
 
 // TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until...
 // TODO: ... there is a good system in place to take that input from the user
@@ -61,19 +62,11 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
 ) {
 	OutMeshes.Reserve(InMeshes.Num());
 	TArray<TArray<TriMesh*>> IntersectGroups;
+	
 	GetIntersectGroups(IntersectGroups, InMeshes);
-
-	for (int i = 0; i < IntersectGroups.Num(); i++) {
-		printf("group {%d}:\n", i + 1);
-		auto& IntersectGroup = IntersectGroups[i];
-		for (int j = 0; j < IntersectGroup.Num(); j++) {
-			const auto TMesh = IntersectGroup[j];
-			printf("TMesh: %s\n", TCHAR_TO_ANSI(*TMesh->MeshActor->GetName()));
-		}
-		putchar('\n');
-	}
-
+	UNavDbg::PrintTriMeshIntersectGroups(IntersectGroups);	
 	FlagObscuredTris(World, IntersectGroups);
+	BuildPolygonsAtMeshIntersections(World, IntersectGroups);
 	
 	// InMeshes.Empty();
 	return GEOPROC_SUCCESS;
@@ -248,14 +241,22 @@ void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<TriM
 	}
 }
 
-void GeometryProcessor::BuildPolygonsAtMeshIntersections(TArray<TArray<TriMesh*>>& Groups) {
+void GeometryProcessor::BuildPolygonsAtMeshIntersections(const UWorld* World, TArray<TArray<TriMesh*>>& Groups) {
 
 	for (int i = 0; i < Groups.Num(); i++) {
 		
 		TArray<TriMesh*>& Group = Groups[i];
-		TArray<TArray<UnstructuredPolygon>> UPolys; // one poly per tri
+		TArray<TArray<UnstructuredPolygon>> UPolys; // one upoly per tri
 
-		Geometry::PopulateUnstructuredPolygons(Group, UPolys);
+		FVector GroupBBoxMin;
+		FVector GroupBBoxMax;
+		Geometry::GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
+		Geometry::PopulateUnstructuredPolygons(
+			World,
+			Group,
+			UPolys,
+			FVector::Dist(GroupBBoxMin, GroupBBoxMax)
+		);
 		
 		for (int j = 0; j < UPolys.Num(); j++) {
 			TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
@@ -273,16 +274,15 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(TArray<TArray<TriMesh*>
 						T.MarkForCull();
 					}
 					else if (T.AnyObscured()) {
-						// ... 0 < n < 3 of the vertices are obscured, something has gone wrong
+						// ... and 0 < n < 3 of the vertices are obscured, something has gone wrong
 						T.MarkProblemCase();
 					}	
-					continue;	
+					continue;
 				}
 
 				// each tri might come out with more than one polygon; for example, a set of intersections in the center
-				// of the tri that do not touch tri edges - one outside, one inside
-				TArray<Polygon> BuildingPolygons;
-				BuildingPolygons.Add(Polygon(k));
+				// of the tri that do not touch tri edges - one outside, one inside; but, we start with one
+				Polygon BuildingPolygon(k);
 				
 			}
 		}

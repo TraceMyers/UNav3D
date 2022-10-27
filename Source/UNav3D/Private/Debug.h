@@ -24,4 +24,6 @@ namespace UNavDbg {
 	void DrawTriMeshTris(const UWorld* World, const TriMesh& TMesh);
 	
 	void DrawTriMeshTrisMulti(const UWorld* World, const TArray<TriMesh>& TMeshes);
+
+	void PrintTriMeshIntersectGroups(const TArray<TArray<TriMesh*>> IntersectGroups);
 }
