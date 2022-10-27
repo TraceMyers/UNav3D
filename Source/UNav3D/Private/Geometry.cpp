@@ -5,34 +5,20 @@
 namespace Geometry {
 	
 	enum TRI_FLAGS {
-		TRI_A_OBSCURED = 0x0001,
-		TRI_B_OBSCURED = 0x0002,
-		TRI_C_OBSCURED = 0x0004
+		TRI_A_OBSCURED =	0x0001,
+		TRI_B_OBSCURED =	0x0002,
+		TRI_C_OBSCURED =	0x0004,
+		TRI_CULL =			0x0008,
+		TRI_PROBLEM_CASE =	0x0010
 	};
 	
 	Tri::Tri(const FVector& _A, const FVector& _B, const FVector& _C) :
 		A(_A), B(_B), C(_C),
 		Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
-		Edges{nullptr},
 		Flags(0x0),
-		Center((_A + _B + _C) * ONE_THIRD),
 		LongestSidelen(GetLongestTriSidelen(_A, _B, _C)),
 		Area(GetArea(_A, _B, _C))
 	{}
-
-	Tri::~Tri() {
-		for (int i = 0; i < 3; i++) {
-			if (Edges[i] != nullptr) {
-				Tri** EdgesOfEdge = Edges[i]->Edges;
-				for (int j = 0; j < 3; j++) {
-					if (EdgesOfEdge[j] == this) {
-						EdgesOfEdge[j] = nullptr;
-						break;
-					}
-				}
-			}
-		}		
-	}
 
 	float Tri::GetLongestTriSidelen(const FVector& A, const FVector& B, const FVector& C) {
 		const float AB = (A - B).Size();
@@ -68,6 +54,22 @@ namespace Geometry {
 
 	bool Tri::IsCObscured() const {
 		return Flags & TRI_C_OBSCURED;
+	}
+
+	bool Tri::AnyObscured() const {
+		return IsAObscured() || IsBObscured() || IsCObscured();
+	}
+
+	bool Tri::AllObscured() const {
+		return IsAObscured() && IsBObscured() && IsCObscured();
+	}
+
+	void Tri::MarkForCull() {
+		Flags |= TRI_CULL;
+	}
+
+	void Tri::MarkProblemCase() {
+		Flags |= TRI_PROBLEM_CASE;
 	}
 
 	TriMesh::TriMesh() :
@@ -330,7 +332,7 @@ namespace Geometry {
 			const Tri& T,
 			FVector& POI
 		) {
-			const FVector PVec = Origin - T.Center;
+			const FVector PVec = Origin - T.A;
 			if (FVector::DotProduct(PVec, T.Normal) <= 0.0f) {
 				return false;
 			}
@@ -424,7 +426,7 @@ namespace Geometry {
 				for (int j = 0; j < TMeshBTriCt; j++) {
 					const Tri& T1 = TMeshBTris[j];
 					// checking if it's possible they could intersect
-					const float Dist = FVector::Dist(T0.Center, T1.Center);
+					const float Dist = FVector::Dist(T0.A, T1.A);
 					if (
 						(Dist < T0.LongestSidelen + T1.LongestSidelen)
 						&& (
@@ -570,14 +572,14 @@ namespace Geometry {
 			const TArray<Tri>& TrisA = TMeshA.Tris;
 			const TArray<Tri>& TrisB = TMeshB.Tris;
 			for (int i = 0; i < TrisA.Num(); i++) {
-				const Tri& TA = TrisA[i];
+				const Tri& T0 = TrisA[i];
 				UnstructuredPolygon& PolyA = UPolysA[i];
 				for (int j = 0; j < TrisB.Num(); j++) {
-					const Tri& TB = TrisB[j];
-					const float Dist = FVector::Dist(TA.Center, TB.Center);
-					if (Dist <= TA.LongestSidelen + TB.LongestSidelen) {
+					const Tri& T1 = TrisB[j];
+					const float Dist = FVector::Dist(T0.A, T1.A);
+					if (Dist <= T0.LongestSidelen + T1.LongestSidelen) {
 						UnstructuredPolygon& PolyB = UPolysB[j];
-						Internal_GetTriPairPolyEdges(TA, TB, PolyA, PolyB);
+						Internal_GetTriPairPolyEdges(T0, T1, PolyA, PolyB);
 					}
 				}
 			}
@@ -700,6 +702,7 @@ namespace Geometry {
 		for (int i = 0; i < GroupCt; i++) {
 			GroupUPolys.Add(TArray<UnstructuredPolygon>());
 			TArray<UnstructuredPolygon>& UPolys = GroupUPolys[i];
+			// creating all of 
 			UPolys.Init(UnstructuredPolygon(), Group[i]->Tris.Num());
 		}
 		for (int i = 0; i < GroupCt - 1; i++) {

@@ -18,7 +18,6 @@ namespace Geometry {
 	struct Tri {
 		
 		Tri(const FVector& _A, const FVector& _B, const FVector& _C);
-		~Tri();
 
 		// meant for use in constructor
 		static float GetLongestTriSidelen(const FVector& A, const FVector& B, const FVector& C);
@@ -38,16 +37,25 @@ namespace Geometry {
 		// asking if this vertex is inside any other meshes; need to be set by Geometry::FlagObscuredTris() first
 		inline bool IsCObscured() const;
 
+		// are any vertices obscured?
+		inline bool AnyObscured() const;
+
+		// are all vertices obscured?
+		inline bool AllObscured() const;
+
+		void MarkForCull();
+
+		void MarkProblemCase();
+
+		// 48 bytes
 		const FVector& A;
 		const FVector& B;
 		const FVector& C;
 		const FVector Normal;
-		Tri* Edges[3]; // adjacent tris touching AB, BC, and CA in that order
-		uint32 Flags;
+		uint32 Flags; // only using 2 of the 4 bytes
 		// for faster intersection checking
-		const FVector Center;
 		const float LongestSidelen;
-		const float Area;
+		const float Area; 
 	};
 
 	// For storing world bounding box vertices of UBoxComponents and AStaticMeshActors' Meshes.
@@ -79,22 +87,53 @@ namespace Geometry {
 		TArray<Tri> Tris;
 	};
 
-	// edges are between adjacent vertices; index Num() - 1 connects to 0
+	// edges are between adjacent vertices; index Num() - 1 connects to 0; Every polygon is a stepping stone
+	// between a triangle that was intersected and a new set of triangles with no intersections.
 	struct Polygon {
+		Polygon(int _TMeshTriIndex)
+			: TMeshTriIndex(_TMeshTriIndex), Mode(ADD)
+		{}
+
+		// 16 bytes
 		TArray<FVector> Vertices;
+		int TMeshTriIndex;
+		enum POLYGON_MODE {ADD, SUBTRACT} Mode;
 	};
 
+	// used to denote intersections between triangles, for building polygons
 	struct PolyEdge {
+
+		enum POLYEDGE_FLAGS {
+			A_OK =	0x0001,
+			B_OK =	0x0002,
+		};
 		
 		PolyEdge(const FVector& _A, const FVector& _B) :
-			A{_A}, B{_B}
+			A{_A}, B{_B}, Flags{0xffff}
 		{}
+
+		bool GetAOk() const {
+			return Flags & A_OK;
+		}
+
+		bool GetBOk() const {
+			return Flags & B_OK;
+		}
+
+		void SetAOk() {
+			Flags |= A_OK;
+		}
+
+		void SetBOk() {
+			Flags |= B_OK;
+		}
 		
 		FVector A;
 		FVector B;
+		uint32 Flags; // only using 2 of the 4 bytes
 	};
 	
-	//
+	// a collection of tri-on-tri intersections, per tri
 	struct UnstructuredPolygon {
 		TArray<PolyEdge> Edges;	
 	};
@@ -108,7 +147,7 @@ namespace Geometry {
 	// Checks whether or not the two bounding boxes overlap. Seemingly necessary to do this on our own for editor plugin.
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB);
 
-	// Checks whether two meshes overlap. May give false negatives due to imprecision of line trace checking
+	// Checks whether two meshes overlap. Only those meshes in TMeshes with an index in PotentialOverlapIndices are checked.
 	bool GetTriMeshIntersectGroups(
 		TArray<int>& OverlapIndices,
 		const TArray<int>& PotentialOverlapIndices,
@@ -119,9 +158,7 @@ namespace Geometry {
 	// Gets the extrema of world axis-aligned Bounding Box of a group of TMeshes
 	void GetGroupExtrema(TArray<TriMesh*> TMeshes, FVector& Min, FVector& Max, bool NudgeOutward=false);
 
-	// Flags most obscured tris in TMesh that are fully or partly inside any other meshes in OtherTMeshes.
-	// if any vertices are inside other meshes, that tri is definitely 'obscured'. Some tris will be obscured
-	// even if they aren't caught here, since all of their vertices may be visible but they're intersected in the middle.
+	// Flags tris in TMesh that have vertices inside any other mesh in OtherTMeshes.
 	void FlagObscuredTris(
 		const UWorld* World,
 		TriMesh& TMesh,
@@ -129,13 +166,10 @@ namespace Geometry {
 		const FVector& GroupExtMin // group bounding box extrema min
 	);
 
+	// 
 	void PopulateUnstructuredPolygons(
 		TArray<TriMesh*>& Group,
 		TArray<TArray<UnstructuredPolygon>>& UPolys
 	);
 	
-	// NOTE: breaking this up with these ideas:
-	// - enclosed: tri is fully enclosed by one mesh or a combination of meshes in its group
-	// - obscured: tri is partially hidden by one mesh or a combination of meshes in its group
-	// - unobscured: tri is fully visible in the context of its group
 }

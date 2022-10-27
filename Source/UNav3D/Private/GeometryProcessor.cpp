@@ -248,9 +248,40 @@ void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<Geom
 void GeometryProcessor::BuildPolygonsAtMeshIntersections(TArray<TArray<Geometry::TriMesh*>>& Groups) {
 
 	for (int i = 0; i < Groups.Num(); i++) {
+		
 		TArray<Geometry::TriMesh*>& Group = Groups[i];
 		TArray<TArray<Geometry::UnstructuredPolygon>> UPolys; // one poly per tri
+
 		Geometry::PopulateUnstructuredPolygons(Group, UPolys);
 		
+		for (int j = 0; j < UPolys.Num(); j++) {
+			TArray<Geometry::UnstructuredPolygon>& MeshUPolys = UPolys[j];
+			Geometry::TriMesh& TMesh = *Group[j];
+			TArray<Geometry::Polygon> TMeshPolygons;
+			
+			for (int k = 0; k < MeshUPolys.Num(); k++) {
+				const Geometry::UnstructuredPolygon& UPoly = MeshUPolys[k];
+				Geometry::Tri& T = TMesh.Tris[k];
+				
+				if (UPoly.Edges.Num() == 0) {
+					// if there are no intersections...
+					if (T.AllObscured()) {
+						// ...and all vertices are obscured, tri is enclosed -> cull
+						T.MarkForCull();
+					}
+					else if (T.AnyObscured()) {
+						// ... 0 < n < 3 of the vertices are obscured, something has gone wrong
+						T.MarkProblemCase();
+					}	
+					continue;	
+				}
+
+				// each tri might come out with more than one polygon; for example, a set of intersections in the center
+				// of the tri that do not touch tri edges - one outside, one inside
+				TArray<Geometry::Polygon> BuildingPolygons;
+				BuildingPolygons.Add(Geometry::Polygon(k));
+				
+			}
+		}
 	}
 }

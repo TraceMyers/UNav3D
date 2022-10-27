@@ -68,6 +68,7 @@ void FUNav3DModule::PluginButtonClicked(){
 	if (!SetBoundsVolume()) {
 		return;
 	}
+	printf("size of polygon: %lu", (unsigned long)sizeof(Geometry::Polygon));
 
 	// starting up progress bar
 	constexpr int TotalCalls = 2;
