@@ -65,7 +65,7 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
 	
 	GetIntersectGroups(IntersectGroups, InMeshes);
 	UNavDbg::PrintTriMeshIntersectGroups(IntersectGroups);	
-	FlagObscuredTris(World, IntersectGroups);
+	// FlagObscuredTris(World, IntersectGroups); // moved this work down
 	BuildPolygonsAtMeshIntersections(World, IntersectGroups);
 	
 	// InMeshes.Empty();
@@ -241,22 +241,22 @@ void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<TriM
 	}
 }
 
+// this one's a bit long
 void GeometryProcessor::BuildPolygonsAtMeshIntersections(const UWorld* World, TArray<TArray<TriMesh*>>& Groups) {
 
 	for (int i = 0; i < Groups.Num(); i++) {
-		
 		TArray<TriMesh*>& Group = Groups[i];
 		TArray<TArray<UnstructuredPolygon>> UPolys; // one upoly per tri
 
 		FVector GroupBBoxMin;
 		FVector GroupBBoxMax;
 		Geometry::GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
-		Geometry::PopulateUnstructuredPolygons(
-			World,
-			Group,
-			UPolys,
-			FVector::Dist(GroupBBoxMin, GroupBBoxMax)
-		);
+		const float BBoxDiagDist = FVector::Dist(GroupBBoxMin, GroupBBoxMax);
+		Geometry::PopulateUnstructuredPolygons(World, Group, UPolys, BBoxDiagDist);
+		
+		// should be integrated to PopulateUnstructuredPolygons to help avoid cache misses OR put in inner loop below
+		// per tri after check num == 3 (changed to num == 0) to reduce calculations
+		Geometry::PopulatePolyEdgesFromTriEdges(World, Group, UPolys, BBoxDiagDist);
 		
 		for (int j = 0; j < UPolys.Num(); j++) {
 			TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
@@ -267,7 +267,7 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(const UWorld* World, TA
 				const UnstructuredPolygon& UPoly = MeshUPolys[k];
 				Tri& T = TMesh.Tris[k];
 				
-				if (UPoly.Edges.Num() == 0) {
+				if (UPoly.Edges.Num() == 3) {
 					// if there are no intersections...
 					if (T.AllObscured()) {
 						// ...and all vertices are obscured, tri is enclosed -> cull
@@ -279,12 +279,147 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(const UWorld* World, TA
 					}	
 					continue;
 				}
+				T.MarkForPolygon();
 
+				TArray<PolyNode> PolygonNodes;
+				PopulateNodes(T, UPoly, PolygonNodes);
+				
 				// each tri might come out with more than one polygon; for example, a set of intersections in the center
 				// of the tri that do not touch tri edges - one outside, one inside; but, we start with one
-				Polygon BuildingPolygon(k);
+				// add if ever touches edge, else subtract unless enclosed by subtract polygon
+				const int NodeCt = PolygonNodes.Num();
+				if (NodeCt == 0) {
+					printf("polygon nodes error\n"); // expand on this
+					continue;
+				}
 				
+				TArray<Polygon> FinishedPolygons;
+				
+				int StartIndex = 0;
+				while (StartIndex < NodeCt) {
+					
+					PolyNode& StartNode = PolygonNodes[StartIndex];
+					TArray<int>& EdgeIndices = StartNode.Edges;
+					// check to make sure the node isn't exhausted
+					if (EdgeIndices.Num() == 0) {
+						StartIndex++;
+						continue;
+					}
+					
+					Polygon BuildingPolygon(k);
+					BuildingPolygon.Vertices.Add(StartNode.Location);
+					int PrevIndex = StartIndex;
+					while (true) {
+						const int EdgeIndex = EdgeIndices[0];
+						if (EdgeIndex == StartIndex) {
+							EdgeIndices.RemoveAt(0, 1, false);
+							const int SNIndexOfEdge = StartNode.Edges.Find(PrevIndex);
+							if (SNIndexOfEdge != -1) {
+								StartNode.Edges.RemoveAt(PrevIndex, 1, false);
+							}
+							else {
+								printf("polygon build error: can't find start index at end\n");
+							}
+							FinishedPolygons.Add(BuildingPolygon);
+							break;
+						}
+						// connect to another node
+						PolyNode& EdgeNode = PolygonNodes[EdgeIndex];
+						BuildingPolygon.Vertices.Add(EdgeNode.Location);
+
+						// remove the connection both ways
+						EdgeIndices.RemoveAt(0, 1, false);
+						if (EdgeNode.Edges.Num() <= 1 || EdgeNode.Edges.Find(PrevIndex) == -1) {
+							printf("polygon build error: num() <= 1 or can't find previndex\n");
+							goto BUILDPOLY_DBG_EXIT;
+						}
+						EdgeNode.Edges.RemoveSingle(PrevIndex);
+
+						// move on to next node
+						EdgeIndices = EdgeNode.Edges;
+						PrevIndex = EdgeIndex;
+					}
+					
+				}
+				BUILDPOLY_DBG_EXIT: ;
 			}
 		}
 	}
+}
+
+void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<PolyNode>& PolygonNodes) {
+	const TArray<PolyEdge>& Edges = UPoly.Edges;
+	for (int i = 0; i < Edges.Num(); i++) {
+		const PolyEdge& PEdge = Edges[i];
+		const TArray<float> PtDistances = PEdge.TrDropDistances;
+		if (PtDistances.Num() == 0) {
+			// A is not enclosed here, so is B, so create 2 nodes. else, none
+			if (!PEdge.IsAEnclosed()) {
+				AddPolyNodes(PolygonNodes, PEdge.A, PEdge.B);
+			}
+			continue;
+		}
+
+		// TODO: probably better to save the position than the distance
+		FVector StartLoc;
+		int start_j;
+		const FVector Dir = (PEdge.B - PEdge.A).GetUnsafeNormal();
+		const int PtDistCt = PtDistances.Num();
+		
+		if (PEdge.IsAEnclosed()) {
+			StartLoc = PEdge.A + Dir * PtDistances[0];
+			if (PtDistCt == 1) {
+				AddPolyNodes(PolygonNodes, StartLoc, PEdge.B);
+				continue;	
+			}
+			start_j = 1;
+		}
+		else {
+			StartLoc = PEdge.A;
+			start_j = 0;
+		}
+
+		for (int j = start_j; ; ) {
+			FVector EndLoc = PEdge.A + Dir * PtDistances[j];
+			AddPolyNodes(PolygonNodes, StartLoc, EndLoc);
+			if (++j == PtDistCt) {
+				break;		
+			}
+			StartLoc = PEdge.A + Dir * PtDistances[j];
+			if (++j == PtDistCt) {
+				AddPolyNodes(PolygonNodes, StartLoc, PEdge.B);
+				break;
+			}
+		}
+	}
+}
+
+void GeometryProcessor::AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, const FVector& B) {
+	constexpr float EPSILON = 1e-2f;
+	int i0 = -1;
+	int i1 = -1;
+	for (int i = 0; i < Nodes.Num(); i++) {
+		PolyNode& PNode = Nodes[i];
+		if (i0 == -1 && FVector::Dist(A, PNode.Location) < EPSILON) {
+			i0 = i;
+			if (i1 != -1) {
+				goto ADDPOLY_LINK;
+			}
+		}
+		else if (i1 == -1 && FVector::Dist(B, PNode.Location) < EPSILON) {
+			i1 = i;
+			if (i0 != -1) {
+				goto ADDPOLY_LINK;
+			}
+		}
+	}
+	if (i0 == -1) {
+		i0 = Nodes.Add(PolyNode(A));
+	}
+	if (i1 == -1) {
+		i1 = Nodes.Add(PolyNode(B));
+	}
+	ADDPOLY_LINK:
+	Nodes[i0].Edges.Add(i1);
+	Nodes[i1].Edges.Add(i0);
 }

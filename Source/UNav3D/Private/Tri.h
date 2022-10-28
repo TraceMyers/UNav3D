@@ -24,6 +24,12 @@ struct Tri {
 	// asking if this vertex is inside any other meshes; need to be set by Geometry::FlagObscuredTris() first
 	inline bool IsCObscured() const;
 
+	inline bool IsTriCull() const;
+
+	inline bool IsTriProblemCase() const;
+
+	inline bool IsTriMarkedForPolygon() const;
+
 	// mark A as inside another mesh
 	inline void SetAObscured();
 	
@@ -42,6 +48,8 @@ struct Tri {
 	void MarkForCull();
 
 	void MarkProblemCase();
+
+	void MarkForPolygon();
 
 	// 48 bytes
 	const FVector& A;

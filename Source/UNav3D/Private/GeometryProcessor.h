@@ -2,7 +2,10 @@
 
 
 class UStaticMesh;
-struct TriMesh;	
+struct TriMesh;
+struct Tri;
+struct UnstructuredPolygon;
+struct PolyNode;
 
 class GeometryProcessor {
 	
@@ -53,7 +56,12 @@ private:
 	// Any tris that have vertices inside other meshes have those vertices flagged
 	static void FlagObscuredTris(const UWorld* World, TArray<TArray<TriMesh*>>& Groups);
 
+	// Find where meshes intersect and build polygons out of the exposed portions of tris
 	void BuildPolygonsAtMeshIntersections(const UWorld* World, TArray<TArray<TriMesh*>>& Groups);
-	
+
+	// 
+	static void PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<PolyNode>& PolygonNodes);
+
+	static void AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, const FVector& B);
 };
 

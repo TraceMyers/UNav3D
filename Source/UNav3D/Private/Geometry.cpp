@@ -402,7 +402,9 @@ namespace Geometry {
 		}
 
 		// traces along line going through A, ending at B, marking distances from A (only those between A and B)
-		// where the line segment is inside other meshes and where it's outside other meshes
+		// where the line segment is inside other meshes and where it's outside other meshes; returns true
+		// if A is enclosed. If there are an even number of distances (including 0), B's enclosed status
+		// is the same as A, otherwise opposite
 		bool Internal_GetObscuredDistances(
 			const UWorld* World,
 			const FCollisionQueryParams& Params,
@@ -424,20 +426,20 @@ namespace Geometry {
 
 			MHitCtr.Reset();
 			bool PassedA = false;
-			bool ANotEnclosed = true;
+			bool AEnclosed = false;
 			bool CurrentlyInsideMesh = false;
 			for (int i = 0; i < MHits.Num(); i++) {
 				// iterate over hits from point outside box to B
 				const MeshHit& MHit = MHits[i];
 				if (!PassedA) {
-					// if we've passed pt A...
 					if (MHit.Distance > BBoxDiagDistance) {
+						// we've now passed pt A and want to start keeping track of distances
+						PassedA = true;
 						// if we're inside a mesh...
 						if (MHitCtr.AnyOdd()) {
 							// note that A is inside a mesh
-							ANotEnclosed = false;
+							AEnclosed = true;
 							MHitCtr.Add(MHit.Mesh);
-							// check if we're still inside a mesh after logging this hit
 							if (MHitCtr.AnyOdd()) {
 								CurrentlyInsideMesh = true;
 							}
@@ -446,16 +448,20 @@ namespace Geometry {
 							}
 						}
 						else {
+							// hits are all even
 							MHitCtr.Add(MHit.Mesh);
+							// must now be odd: if hits were even, adding another hit will definitely make a count odd
+							CurrentlyInsideMesh = true;
+							Distances.Add(MHit.Distance - BBoxDiagDistance);	
 						}
-						// we've now passed pt A and want to start keeping track of distances
-						PassedA = true;
-						continue;
 					}
-					MHitCtr.Add(MHit.Mesh);
+					else {
+						MHitCtr.Add(MHit.Mesh);
+					}
 				}
 				else {
 					// keep track of any distance from pt A where we pass in or out of all other meshes
+					MHitCtr.Add(MHit.Mesh);
 					if (CurrentlyInsideMesh) {
 						if (!MHitCtr.AnyOdd()) {
 							Distances.Add(MHit.Distance - BBoxDiagDistance);	
@@ -468,11 +474,11 @@ namespace Geometry {
 					}
 				}
 			}
-			// if no hits were registered between A and B, return whether A (and B) is not enclosed
+			// if no hits were registered between A and B, return whether A (and B) is enclosed
 			if (!PassedA) {
-				return !MHitCtr.AnyOdd();
+				return MHitCtr.AnyOdd();
 			}
-			return ANotEnclosed;
+			return AEnclosed;
 		}
 		
 		// params should be set to complex and to ignore the mesh of the given tri; does NOT clear flags beforehand
@@ -535,8 +541,13 @@ namespace Geometry {
 					TriEdgeFlags |= PolyEdge::OTHER_ON_EDGE_CA;
 				}	
 			}
-				
+
+			// triangles can intersect each other in 3 ways:
+			// - one of T0's edges intersects T1's center and one of T1's edges intersects T0's center
+			// - two of T0's edges intersect T1's center
+			// - two of T1's edges intersect T0's center
 			if (T0HitCt == 1 && T1HitCt == 1) {
+				// could be using refs here, so polyedge could just store refs
 				PolyEdge P(TruePOI[0][0], TruePOI[1][0], TriEdgeFlags);
 				PolyA.Edges.Add(P);
 				P.FlipTriEdgeFlags();	
@@ -571,16 +582,16 @@ namespace Geometry {
 		) {
 			// The edges are (mostly) identical, so if one has an obscured point, the other will, too
 			if (Internal_IsPointObscured(World, Params, PolyEdge0.A, MinZ, MHitCtr)) {
-				PolyEdge0.SetANotOk();	
-				PolyEdge1.SetANotOk();	
+				PolyEdge0.SetAEnclosed();	
+				PolyEdge1.SetAEnclosed();	
 			}
 			if (Internal_IsPointObscured(World, Params, PolyEdge0.B, MinZ, MHitCtr)) {
-				PolyEdge0.SetBNotOk();
-				PolyEdge1.SetBNotOk();	
+				PolyEdge0.SetBEnclosed();
+				PolyEdge1.SetBEnclosed();	
 			}
 		}
 
-		// finds intersections between triangles, creating PolyEdges for use in building polygons
+		// finds intersections between triangles on meshes, creating PolyEdges for use in building polygons
 		void Internal_FindPolyEdges(
 			const UWorld* World,
 			const TriMesh& TMeshA,
@@ -603,14 +614,16 @@ namespace Geometry {
 				for (int j = 0; j < TrisB.Num(); j++) {
 					const Tri& T1 = TrisB[j];
 					const float Dist = FVector::Dist(T0.A, T1.A);
+					// if it's even possible they could intersect...
 					if (Dist <= T0.LongestSidelen + T1.LongestSidelen) {
 						UnstructuredPolygon& PolyB = UPolysB[j];
 						// if an intersection between these triangles exists, put it in both polys
 						if (Internal_GetTriPairPolyEdge(T0, T1, PolyA, PolyB)) {
 							PolyEdge& PolyEdge0 = PolyA.Edges.Last();
+							PolyEdge& PolyEdge1 = PolyB.Edges.Last();
 							// check where the edge line segment is inside and outside all other meshes to help
 							// with polygon creation
-							Internal_GetObscuredDistances(
+							const bool AEnclosed = Internal_GetObscuredDistances(
 								World,
 								Params,
 								PolyEdge0.A,
@@ -619,11 +632,73 @@ namespace Geometry {
 								BBoxDiagDist,
 								MHitCtr
 							);
-							PolyEdge& PolyEdge1 = PolyB.Edges.Last();
+							if (AEnclosed) {
+								PolyEdge0.SetAEnclosed();
+								PolyEdge1.SetAEnclosed();
+								// if A is enclosed and the inside-outside distance point ct is even, B is also enclosed
+								if (PolyEdge0.TrDropDistances.Num() % 2 == 0) {
+									PolyEdge0.SetBEnclosed();
+									PolyEdge1.SetBEnclosed();
+								}
+							}
+							else if (PolyEdge0.TrDropDistances.Num() % 2 == 1) {
+								// if A is not enclosed and the distance point ct is odd, B is enclosed	
+								PolyEdge0.SetBEnclosed();
+								PolyEdge1.SetBEnclosed();
+							}
 							PolyEdge1.TrDropDistances = PolyEdge0.TrDropDistances;
 						}
 					}
 				}
+			}
+		}
+
+		void Internal_PopulatePolyEdgesFromTriEdges(
+			const UWorld* World,
+			TriMesh& TMesh,
+			TArray<UnstructuredPolygon>& UPolysA,
+			float BBoxDiagDistance,
+			MeshHitCounter& MHitCtr
+		) {
+			FCollisionQueryParams Params;
+			Params.bTraceComplex = true;
+			Params.bIgnoreBlocks = true;
+
+			TArray<Tri>& Tris = TMesh.Tris;
+			constexpr uint32 flags = PolyEdge::ON_EDGE_AB | PolyEdge::ON_EDGE_BC | PolyEdge::ON_EDGE_CA;
+			for (int i = 0; i < Tris.Num(); i++) {
+				Tri& T = Tris[i];
+				PolyEdge PEdgeAB(T.A, T.B, flags);
+				const bool AObscured = Internal_GetObscuredDistances(
+					World, Params, T.A, T.B, PEdgeAB.TrDropDistances, BBoxDiagDistance, MHitCtr
+				);
+				PolyEdge PEdgeBC(T.B, T.C, flags);
+				const bool BObscured = Internal_GetObscuredDistances(
+					World, Params, T.B, T.C, PEdgeBC.TrDropDistances, BBoxDiagDistance, MHitCtr
+				);
+				PolyEdge PEdgeCA(T.C, T.A, flags);
+				const bool CObscured = Internal_GetObscuredDistances(
+					World, Params, T.C, T.A, PEdgeCA.TrDropDistances, BBoxDiagDistance, MHitCtr
+				);
+				TArray<PolyEdge>& Edges = UPolysA[i].Edges;
+				if (AObscured) {
+					T.SetAObscured();
+					PEdgeAB.SetAEnclosed();
+					PEdgeCA.SetBEnclosed();
+				}
+				if (BObscured) {
+					T.SetBObscured();
+					PEdgeBC.SetAEnclosed();
+					PEdgeAB.SetBEnclosed();
+				}
+				if (CObscured) {
+					T.SetCObscured();
+					PEdgeCA.SetAEnclosed();
+					PEdgeBC.SetBEnclosed();
+				}
+				Edges.Add(PEdgeAB);
+				Edges.Add(PEdgeBC);
+				Edges.Add(PEdgeCA);
 			}
 		}
 
@@ -802,13 +877,29 @@ namespace Geometry {
 				TArray<TriMesh*> GroupExcludingAandB = Group;
 				GroupExcludingAandB.Remove(&TMeshA);
 				GroupExcludingAandB.Remove(&TMeshB);
-				Internal_SetMeshesOverlap(GroupExcludingAandB);
 				MeshHitCounter MHitCtr(GroupExcludingAandB);
+				Internal_SetMeshesOverlap(GroupExcludingAandB);
 				Internal_FindPolyEdges(World, TMeshA, TMeshB, UPolysA, UPolysB, MHitCtr, BBoxDiagDist);	
 				Internal_SetMeshesIgnore(GroupExcludingAandB);
 			}
 		}	
 	}
 
-
+	void PopulatePolyEdgesFromTriEdges(
+		const UWorld* World,
+		const TArray<TriMesh*>& Group,
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
+		float BBoxDiagDistance
+	) {
+		for (int i = 0; i < Group.Num(); i++) {
+			TriMesh& TMesh = *Group[i];
+			TArray<TriMesh*> GroupExcludingThisMesh = Group;
+			GroupExcludingThisMesh.Remove(&TMesh);
+			MeshHitCounter MHitCtr(GroupExcludingThisMesh);
+			Internal_SetMeshesOverlap(GroupExcludingThisMesh);
+			Internal_PopulatePolyEdgesFromTriEdges(World, TMesh, GroupUPolys[i], BBoxDiagDistance, MHitCtr);
+			Internal_SetMeshesIgnore(GroupExcludingThisMesh);
+		}
+		
+	}
 }

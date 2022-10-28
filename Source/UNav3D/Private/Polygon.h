@@ -4,12 +4,12 @@
 // between a triangle that was intersected and a new set of triangles with no intersections.
 struct Polygon {
 	Polygon(int _TMeshTriIndex)
-		: TMeshTriIndex(_TMeshTriIndex), Mode(ADD)
+		: TMeshTriIndex(_TMeshTriIndex), Mode(SUBTRACT) // guilty until proven innocent :(
 	{}
 
 	TArray<FVector> Vertices;
 	int TMeshTriIndex;
-	enum POLYGON_MODE {ADD, SUBTRACT} Mode;
+	enum POLYGON_MODE {SUBTRACT, ADD} Mode;
 };
 
 // used to denote intersections between triangles, for building polygons
@@ -17,8 +17,8 @@ struct PolyEdge {
 	
 	enum POLY_FLAGS {
 		VERTEX_FLAGS =		0x000f,
-		A_OK =				0x0001,
-		B_OK =				0x0002,
+		A_ENCLOSED =		0x0001,
+		B_ENCLOSED =		0x0002,
 		
 		EDGE_FLAGS =		0x00f0,
 		ON_EDGE_AB =		0x0010,
@@ -32,23 +32,31 @@ struct PolyEdge {
 	};
 	
 	PolyEdge(const FVector &A, const FVector& B, uint16 TriEdgeFlags);
-	inline bool IsAOk() const;
-	inline bool IsBOk() const;
+	inline bool IsAEnclosed() const;
+	inline bool IsBEnclosed() const;
 	inline bool IsOnTriEdgeAB() const;
 	inline bool IsOnTriEdgeBC() const;
 	inline bool IsOnTriEdgeCA() const;
-	inline void SetANotOk();
-	inline void SetBNotOk();
+	inline void SetAEnclosed();
+	inline void SetBEnclosed();
 
 	// as of 10/27/2022, used in Geometry::Internal_GetTriPairPolyEdge() in order to instantiate one less block
 	// of memory when copying nearly identical PolyEdges into two TArrays; the only difference between them
 	// is their 0x00f0 and 0x0f00 flags need to be swapped.
 	inline void FlipTriEdgeFlags();
 	
-	const FVector& A;
-	const FVector& B;
+	const FVector A;
+	const FVector B;
 	uint32 Flags; // only using 2 of the 4 bytes
 	TArray<float> TrDropDistances; // distances from A (toward B) marking where this edge passes in and out of other meshes
+};
+
+struct PolyNode {
+	PolyNode(const FVector& _Location) :
+		Location(_Location)
+	{}
+	const FVector Location;
+	TArray<int> Edges;
 };
 
 // a collection of tri-on-tri intersections, per tri

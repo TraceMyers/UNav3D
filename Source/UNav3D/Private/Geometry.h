@@ -46,4 +46,10 @@ namespace Geometry {
 		const float BBoxDiagDist 
 	);
 	
+	void PopulatePolyEdgesFromTriEdges(
+		const UWorld* World,
+		const TArray<TriMesh*>& Group,
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
+		float BBoxDiagDistance
+	);
 }

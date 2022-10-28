@@ -1,17 +1,17 @@
 ﻿#include "Polygon.h"
 
-static constexpr int ONE_BYTE = 8;
+static constexpr int HALF_BYTE = 4;
 
 PolyEdge::PolyEdge(const FVector& _A, const FVector& _B, uint16 TriEdgeFlags) :
-	A(_A), B(_B), Flags(A_OK | B_OK | TriEdgeFlags)	
+	A(_A), B(_B), Flags(TriEdgeFlags)	
 {}
 
-bool PolyEdge::IsAOk() const {
-	return Flags & A_OK;	
+bool PolyEdge::IsAEnclosed() const {
+	return Flags & A_ENCLOSED;	
 }
 
-bool PolyEdge::IsBOk() const {
-	return Flags & B_OK;	
+bool PolyEdge::IsBEnclosed() const {
+	return Flags & B_ENCLOSED;	
 }
 
 bool PolyEdge::IsOnTriEdgeAB() const {
@@ -26,15 +26,15 @@ bool PolyEdge::IsOnTriEdgeCA() const {
 	return Flags & ON_EDGE_CA;	
 }
 
-void PolyEdge::SetANotOk() {
-	Flags &= ~A_OK;	
+void PolyEdge::SetAEnclosed() {
+	Flags |= A_ENCLOSED;	
 }
 
-void PolyEdge::SetBNotOk() {
-	Flags &= ~B_OK;	
+void PolyEdge::SetBEnclosed() {
+	Flags |= B_ENCLOSED;	
 }
 
 void PolyEdge::FlipTriEdgeFlags() {
-	Flags = (Flags & VERTEX_FLAGS) | ((Flags & EDGE_FLAGS) << ONE_BYTE) | ((Flags & OTHER_EDGE_FLAGS) >> ONE_BYTE);
+	Flags = (Flags & VERTEX_FLAGS) | ((Flags & EDGE_FLAGS) << HALF_BYTE) | ((Flags & OTHER_EDGE_FLAGS) >> HALF_BYTE);
 }
 

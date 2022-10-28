@@ -5,7 +5,8 @@ enum TRI_FLAGS {
 	TRI_B_OBSCURED =	0x0002,
 	TRI_C_OBSCURED =	0x0004,
 	TRI_CULL =			0x0008,
-	TRI_PROBLEM_CASE =	0x0010
+	TRI_PROBLEM_CASE =	0x0010,
+	TRI_TO_POLYGON =	0x0020,
 };
 
 Tri::Tri(const FVector& _A, const FVector& _B, const FVector& _C) :
@@ -52,6 +53,18 @@ bool Tri::IsCObscured() const {
 	return Flags & TRI_C_OBSCURED;
 }
 
+bool Tri::IsTriCull() const {
+	return Flags & TRI_CULL;	
+}
+
+bool Tri::IsTriProblemCase() const {
+	return Flags & TRI_PROBLEM_CASE;	
+}
+
+bool Tri::IsTriMarkedForPolygon() const {
+	return Flags & TRI_TO_POLYGON;
+}
+
 void Tri::SetAObscured() {
 	Flags |= TRI_A_OBSCURED;	
 }
@@ -78,4 +91,8 @@ void Tri::MarkForCull() {
 
 void Tri::MarkProblemCase() {
 	Flags |= TRI_PROBLEM_CASE;
+}
+
+void Tri::MarkForPolygon() {
+	Flags |= TRI_TO_POLYGON;	
 }
