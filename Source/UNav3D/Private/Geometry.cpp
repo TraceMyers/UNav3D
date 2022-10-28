@@ -8,7 +8,7 @@
 namespace Geometry {
 	
 	static constexpr float ONE_THIRD = 1.0f / 3.0f;
-	static constexpr float NEAR_EPSILON = 1e-2f;
+	static constexpr float NEAR_EPSILON = 3e-2f;
 
 	namespace {
 

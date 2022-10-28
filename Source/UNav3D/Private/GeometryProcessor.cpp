@@ -409,7 +409,7 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 }
 
 void GeometryProcessor::AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, const FVector& B) {
-	constexpr float EPSILON = 1e-2f;
+	constexpr float EPSILON = 1e-1f;
 	int i0 = -1;
 	int i1 = -1;
 	for (int i = 0; i < Nodes.Num(); i++) {
