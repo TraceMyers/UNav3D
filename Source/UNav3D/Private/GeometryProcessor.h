@@ -6,6 +6,7 @@ struct TriMesh;
 struct Tri;
 struct UnstructuredPolygon;
 struct PolyNode;
+struct Polygon;
 
 class GeometryProcessor {
 	
@@ -57,7 +58,11 @@ private:
 	static void FlagObscuredTris(const UWorld* World, TArray<TArray<TriMesh*>>& Groups);
 
 	// Find where meshes intersect and build polygons out of the exposed portions of tris
-	void BuildPolygonsAtMeshIntersections(const UWorld* World, TArray<TArray<TriMesh*>>& Groups);
+	static void BuildPolygonsAtMeshIntersections(
+		const UWorld* World,
+		TArray<TArray<TriMesh*>>& Groups,
+		TArray<TArray<TArray<Polygon>>>& Polygons
+	);
 
 	// 
 	static void PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<PolyNode>& PolygonNodes);

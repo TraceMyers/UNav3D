@@ -87,8 +87,8 @@ void FUNav3DModule::PluginButtonClicked(){
 #ifdef UNAV_DBG
 	for (int i = 0; i < TMeshes.Num(); i++) {
 		TriMesh& TMesh = TMeshes[i];
-		UNavDbg::DrawTriMeshTris(World, TMesh);
-		UNavDbg::DrawTriMeshVertices(World, TMesh);
+		// UNavDbg::DrawTriMeshTris(World, TMesh);
+		// UNavDbg::DrawTriMeshVertices(World, TMesh);
 	}
 #endif
 
@@ -175,7 +175,7 @@ bool FUNav3DModule::PopulateTriMeshes(
 
 #ifdef UNAV_DBG
 		UNavDbg::PrintTriMesh(TMesh);
-		UNavDbg::DrawTriMeshBoundingBox(World, TMesh);
+		// UNavDbg::DrawTriMeshBoundingBox(World, TMesh);
 #endif
 		
 	}

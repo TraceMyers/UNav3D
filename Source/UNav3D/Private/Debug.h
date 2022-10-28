@@ -2,6 +2,7 @@
 
 struct TriMesh;
 struct Tri;
+struct Polygon;
 class UWorld;
 
 #define UNAV_DBG
@@ -26,4 +27,8 @@ namespace UNavDbg {
 	void DrawTriMeshTrisMulti(const UWorld* World, const TArray<TriMesh>& TMeshes);
 
 	void PrintTriMeshIntersectGroups(const TArray<TArray<TriMesh*>> IntersectGroups);
+
+	void DrawPolygon(const UWorld* World, const Polygon& P);
+
+	void DrawAllPolygons(const UWorld* World, const TArray<TArray<TArray<Polygon>>>& Polygons);
 }

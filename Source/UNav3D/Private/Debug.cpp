@@ -124,3 +124,23 @@ void UNavDbg::PrintTriMeshIntersectGroups(const TArray<TArray<TriMesh*>> Interse
 		putchar('\n');
 	}
 }
+
+void UNavDbg::DrawPolygon(const UWorld* World, const Polygon& P) {
+	const TArray<FVector>& Points = P.Vertices;
+	for (int i = 0; i < Points.Num() - 1; i++) {
+		DrawDebugLine(World, Points[i], Points[i + 1], FColor::Purple, false, DBG_DRAW_TIME, 0, 1.5f);	
+	}
+	DrawDebugLine(World, Points[0], Points.Last(), FColor::Purple, false, DBG_DRAW_TIME, 0, 1.5f);	
+}
+
+void UNavDbg::DrawAllPolygons(const UWorld* World, const TArray<TArray<TArray<Polygon>>>& Polygons) {
+	for (int i = 0; i < Polygons.Num(); i++) {
+		auto& GroupPolygons = Polygons[i];
+		for (int j = 0; j < GroupPolygons.Num(); j++) {
+			auto& TMeshPolygons = GroupPolygons[j];
+			for (int k = 0; k < TMeshPolygons.Num(); k++) {
+				DrawPolygon(World, TMeshPolygons[k]);
+			}
+		}
+	}
+}

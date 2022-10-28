@@ -8,7 +8,7 @@
 namespace Geometry {
 	
 	static constexpr float ONE_THIRD = 1.0f / 3.0f;
-	static constexpr float NEAR_EPSILON = 1e-4f;
+	static constexpr float NEAR_EPSILON = 1e-2f;
 
 	namespace {
 
@@ -554,19 +554,22 @@ namespace Geometry {
 				PolyB.Edges.Add(P);
 				return true;
 			}
-			if (T0HitCt == 2) {
+			if (T0HitCt == 2 && T1HitCt == 0) {
 				PolyEdge P(TruePOI[0][0], TruePOI[0][1], TriEdgeFlags);	
 				PolyA.Edges.Add(P);
 				P.FlipTriEdgeFlags();	
 				PolyB.Edges.Add(P);
 				return true;
 			}
-			if (T1HitCt == 2) {
+			if (T1HitCt == 2 && T0HitCt == 0) {
 				PolyEdge P(TruePOI[1][0], TruePOI[1][1], TriEdgeFlags);	
 				PolyA.Edges.Add(P);
 				P.FlipTriEdgeFlags();	
 				PolyB.Edges.Add(P);
 				return true;
+			}
+			if (T1HitCt > 0 || T0HitCt > 0) {
+				printf("what?\n");
 			}
 			return false;
 		}

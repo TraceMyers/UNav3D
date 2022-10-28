@@ -3,12 +3,12 @@
 // edges are between adjacent vertices; index Num() - 1 connects to 0; Every polygon is a stepping stone
 // between a triangle that was intersected and a new set of triangles with no intersections.
 struct Polygon {
-	Polygon(int _TMeshTriIndex)
-		: TMeshTriIndex(_TMeshTriIndex), Mode(SUBTRACT) // guilty until proven innocent :(
+	Polygon(int _TriIndex)
+		: TriIndex(_TriIndex), Mode(SUBTRACT) // guilty until proven innocent :(
 	{}
 
 	TArray<FVector> Vertices;
-	int TMeshTriIndex;
+	int TriIndex;
 	enum POLYGON_MODE {SUBTRACT, ADD} Mode;
 };
 

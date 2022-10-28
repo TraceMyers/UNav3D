@@ -64,9 +64,11 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
 	TArray<TArray<TriMesh*>> IntersectGroups;
 	
 	GetIntersectGroups(IntersectGroups, InMeshes);
-	UNavDbg::PrintTriMeshIntersectGroups(IntersectGroups);	
-	// FlagObscuredTris(World, IntersectGroups); // moved this work down
-	BuildPolygonsAtMeshIntersections(World, IntersectGroups);
+	UNavDbg::PrintTriMeshIntersectGroups(IntersectGroups);
+	TArray<TArray<TArray<Polygon>>> Polygons;
+	BuildPolygonsAtMeshIntersections(World, IntersectGroups, Polygons);
+
+	UNavDbg::DrawAllPolygons(World, Polygons);
 	
 	// InMeshes.Empty();
 	return GEOPROC_SUCCESS;
@@ -242,7 +244,11 @@ void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<TriM
 }
 
 // this one's a bit long
-void GeometryProcessor::BuildPolygonsAtMeshIntersections(const UWorld* World, TArray<TArray<TriMesh*>>& Groups) {
+void GeometryProcessor::BuildPolygonsAtMeshIntersections(
+	const UWorld* World,
+	TArray<TArray<TriMesh*>>& Groups,
+	TArray<TArray<TArray<Polygon>>>& AllPolygons
+) {
 
 	for (int i = 0; i < Groups.Num(); i++) {
 		TArray<TriMesh*>& Group = Groups[i];
@@ -257,11 +263,16 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(const UWorld* World, TA
 		// should be integrated to PopulateUnstructuredPolygons to help avoid cache misses OR put in inner loop below
 		// per tri after check num == 3 (changed to num == 0) to reduce calculations
 		Geometry::PopulatePolyEdgesFromTriEdges(World, Group, UPolys, BBoxDiagDist);
+
+		AllPolygons.Add(TArray<TArray<Polygon>>());
+		TArray<TArray<Polygon>>& GroupPolygons = AllPolygons.Last();
 		
 		for (int j = 0; j < UPolys.Num(); j++) {
 			TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
 			TriMesh& TMesh = *Group[j];
-			TArray<Polygon> TMeshPolygons;
+
+			GroupPolygons.Add(TArray<Polygon>());
+			TArray<Polygon>& TMeshPolygons = GroupPolygons.Last();
 			
 			for (int k = 0; k < MeshUPolys.Num(); k++) {
 				const UnstructuredPolygon& UPoly = MeshUPolys[k];
@@ -279,7 +290,6 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(const UWorld* World, TA
 					}	
 					continue;
 				}
-				T.MarkForPolygon();
 
 				TArray<PolyNode> PolygonNodes;
 				PopulateNodes(T, UPoly, PolygonNodes);
@@ -289,19 +299,22 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(const UWorld* World, TA
 				// add if ever touches edge, else subtract unless enclosed by subtract polygon
 				const int NodeCt = PolygonNodes.Num();
 				if (NodeCt == 0) {
-					printf("polygon nodes error\n"); // expand on this
+					T.MarkForCull();
 					continue;
 				}
+
+				for (int m = 0; m < NodeCt; m++) {
+					if (PolygonNodes[m].Edges.Num() % 2 == 1) {
+						T.MarkForCull();
+						goto BUILDPOLY_NEXT;
+					}
+				}
 				
-				TArray<Polygon> FinishedPolygons;
-				
-				int StartIndex = 0;
-				while (StartIndex < NodeCt) {
-					
+				for (int StartIndex = 0; StartIndex < NodeCt; ) {
 					PolyNode& StartNode = PolygonNodes[StartIndex];
-					TArray<int>& EdgeIndices = StartNode.Edges;
+					TArray<int>* EdgeIndices = &StartNode.Edges;
 					// check to make sure the node isn't exhausted
-					if (EdgeIndices.Num() == 0) {
+					if (EdgeIndices->Num() == 0) {
 						StartIndex++;
 						continue;
 					}
@@ -310,17 +323,17 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(const UWorld* World, TA
 					BuildingPolygon.Vertices.Add(StartNode.Location);
 					int PrevIndex = StartIndex;
 					while (true) {
-						const int EdgeIndex = EdgeIndices[0];
+						const int EdgeIndex = (*EdgeIndices)[0];
 						if (EdgeIndex == StartIndex) {
-							EdgeIndices.RemoveAt(0, 1, false);
+							EdgeIndices->RemoveAt(0, 1, false);
 							const int SNIndexOfEdge = StartNode.Edges.Find(PrevIndex);
 							if (SNIndexOfEdge != -1) {
-								StartNode.Edges.RemoveAt(PrevIndex, 1, false);
+								StartNode.Edges.RemoveAt(SNIndexOfEdge, 1, false);
 							}
 							else {
 								printf("polygon build error: can't find start index at end\n");
 							}
-							FinishedPolygons.Add(BuildingPolygon);
+							TMeshPolygons.Add(BuildingPolygon);
 							break;
 						}
 						// connect to another node
@@ -328,20 +341,21 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(const UWorld* World, TA
 						BuildingPolygon.Vertices.Add(EdgeNode.Location);
 
 						// remove the connection both ways
-						EdgeIndices.RemoveAt(0, 1, false);
+						EdgeIndices->RemoveAt(0, 1, false);
 						if (EdgeNode.Edges.Num() <= 1 || EdgeNode.Edges.Find(PrevIndex) == -1) {
 							printf("polygon build error: num() <= 1 or can't find previndex\n");
-							goto BUILDPOLY_DBG_EXIT;
+							T.MarkForCull();
+							goto BUILDPOLY_NEXT;
 						}
 						EdgeNode.Edges.RemoveSingle(PrevIndex);
 
 						// move on to next node
-						EdgeIndices = EdgeNode.Edges;
+						EdgeIndices = &EdgeNode.Edges;
 						PrevIndex = EdgeIndex;
 					}
-					
 				}
-				BUILDPOLY_DBG_EXIT: ;
+				T.MarkForPolygon();
+				BUILDPOLY_NEXT: ;
 			}
 		}
 	}
