@@ -347,7 +347,7 @@ namespace Geometry {
 		}
 
 		// TODO: currently depends on a channel added in-project. will need to have the plugin create the channel...
-		// TODO: ... used here. Default channel result is overlap.
+		// TODO: ... used here. Default channel result is ignore.
 		void Internal_LineTraceThrough(
 			const UWorld* World,
 			const FCollisionQueryParams& Params,
