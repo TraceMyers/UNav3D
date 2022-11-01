@@ -58,6 +58,8 @@ void AUNav3DBoundsVolume::GetOverlappingMeshes(TArray<TriMesh>& Meshes) {
 			continue;	
 		}
 
+		// TODO: could instead initialize Meshes in chunks and set Meshes[i].MeshActor = FoundMesh, reducing expands...
+		// TODO: ... and no need to copy
 		TriMesh TMesh;
 		TMesh.MeshActor = FoundMesh;
 		Geometry::SetBoundingBox(TMesh.Box, FoundMesh);
