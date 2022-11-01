@@ -262,6 +262,9 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 		
 		// should be integrated to PopulateUnstructuredPolygons to help avoid cache misses OR put in inner loop below
 		// per tri after check num == 3 (changed to num == 0) to reduce calculations
+		if (i == 1) {
+			printf("hello\n");
+		}
 		Geometry::PopulatePolyEdgesFromTriEdges(World, Group, UPolys, BBoxDiagDist);
 
 		AllPolygons.Add(TArray<TArray<Polygon>>());
@@ -409,7 +412,7 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 }
 
 void GeometryProcessor::AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, const FVector& B) {
-	constexpr float EPSILON = 1e-1f;
+	constexpr float EPSILON = 1e-2f;
 	int i0 = -1;
 	int i1 = -1;
 	for (int i = 0; i < Nodes.Num(); i++) {
