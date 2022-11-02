@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "TriMesh.h"
 
 class AStaticMeshActor;
 class UBoxComponent;
@@ -30,26 +31,13 @@ namespace Geometry {
 	// Gets the extrema of world axis-aligned Bounding Box of a group of TMeshes
 	void GetGroupExtrema(TArray<TriMesh*> TMeshes, FVector& Min, FVector& Max, bool NudgeOutward=false);
 
-	// Flags tris in TMesh that have vertices inside any other mesh in OtherTMeshes.
-	void FlagObscuredTris(
-		const UWorld* World,
-		TriMesh& TMesh,
-		TArray<TriMesh*>& OtherTMeshes,
-		const FVector& GroupExtMin // group bounding box extrema min
-	);
+	void GetAxisAlignedExtrema(const BoundingBox& BBox, FVector& Min, FVector& Max, float NudgeOutward=0.0f);
 
-	// 
+	// find all intersections between tris and create a picture of where each tri is inside and where it's outside
+	// other meshes
 	void PopulateUnstructuredPolygons(
-		const UWorld* World,
 		TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
-		const float BBoxDiagDist 
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys
 	);
 	
-	void PopulatePolyEdgesFromTriEdges(
-		const UWorld* World,
-		const TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
-		float BBoxDiagDistance
-	);
 }

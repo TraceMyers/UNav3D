@@ -10,7 +10,7 @@
 void UNavDbg::PrintTriMesh(const TriMesh& TMesh) {
 	printf(
 		"Bounds Volume found Mesh %s with %d vertices and %d tris.\n", 
-		TCHAR_TO_ANSI(*TMesh.MeshActor->GetName()), TMesh.VertexCt, TMesh.Tris.Num()
+		TCHAR_TO_ANSI(*TMesh.MeshActor->GetName()), TMesh.VertexCt, TMesh.Grid.Num()
 	);
 }
 
@@ -73,7 +73,7 @@ void UNavDbg::DrawTriMeshVerticesMulti(const UWorld* World, const TArray<TriMesh
 }
 
 void UNavDbg::DrawTriMeshTris(const UWorld* World, const TriMesh& TMesh) {
-	const auto& Tris = TMesh.Tris; 
+	const auto& Tris = TMesh.Grid; 
 	for (int i = 0; i < Tris.Num(); i++) {
 		const auto& Tri = Tris[i];
 		if (Tri.IsTriCull()) {

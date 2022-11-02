@@ -29,5 +29,5 @@ void TriMesh::ResetVertexData() {
 		delete Vertices;
 		Vertices = nullptr;
 	}
-	Tris.Empty(32);
+	Grid.Reset();
 }

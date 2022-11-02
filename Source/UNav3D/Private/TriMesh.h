@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "TriGrid.h"
 
 // TODO: consider creating a vertex buffer and tri buffer, rather than individual allocations per TriMesh
 
@@ -36,6 +37,5 @@ struct TriMesh {
 	BoundingBox Box;
 	int VertexCt;
 	FVector* Vertices;
-	TArray<Tri> Tris;
-    	
+	TriGrid Grid;
 };

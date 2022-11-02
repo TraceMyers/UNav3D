@@ -1,26 +1,45 @@
 ﻿#include "Tri.h"
+#include <utility>
 
-enum TRI_FLAGS {
-	TRI_A_OBSCURED =	0x0001,
-	TRI_B_OBSCURED =	0x0002,
-	TRI_C_OBSCURED =	0x0004,
-	TRI_CULL =			0x0008,
-	TRI_PROBLEM_CASE =	0x0010,
-	TRI_TO_POLYGON =	0x0020,
-};
+namespace {
+	
+	enum TRI_FLAGS {
+		TRI_A_OBSCURED =	0x0001,
+		TRI_B_OBSCURED =	0x0002,
+		TRI_C_OBSCURED =	0x0004,
+		TRI_CULL =			0x0008,
+		TRI_PROBLEM_CASE =	0x0010,
+		TRI_TO_POLYGON =	0x0020,
+	};
 
-Tri::Tri(const FVector& _A, const FVector& _B, const FVector& _C) :
+	constexpr float ONE_THIRD = 1.0f / 3.0f;
+	static FVector ZeroVec (0.0f, 0.0f, 0.0f);
+}
+
+FVector TempTri::GetCenter() const {
+	return (*A + *B + *C) * ONE_THIRD;
+}
+
+Tri::Tri() :
+	A(ZeroVec), B(ZeroVec), C(ZeroVec),
+	Normal(FVector::OneVector),
+	Flags(0x0),
+	Area(0.0f),
+	LongestSidelenSq(0.0f)
+{}
+
+Tri::Tri(FVector& _A, FVector& _B, FVector& _C) :
 	A(_A), B(_B), C(_C),
 	Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
 	Flags(0x0),
-	LongestSidelen(GetLongestTriSidelen(_A, _B, _C)),
-	Area(GetArea(_A, _B, _C))
+	Area(GetArea(_A, _B, _C)),
+	LongestSidelenSq(GetLongestTriSidelenSq(_A, _B, _C))
 {}
 
-float Tri::GetLongestTriSidelen(const FVector& A, const FVector& B, const FVector& C) {
-	const float AB = (A - B).Size();
-	const float BC = (B - C).Size();
-	const float CA = (C - A).Size();
+float Tri::GetLongestTriSidelenSq(const FVector& A, const FVector& B, const FVector& C) {
+	const float AB = (A - B).SizeSquared();
+	const float BC = (B - C).SizeSquared();
+	const float CA = (C - A).SizeSquared();
 	if (AB > BC) {
 		if (AB > CA) {
 			return AB;
@@ -39,6 +58,10 @@ float Tri::GetArea(const FVector& A, const FVector& B, const FVector& C) {
 
 float Tri::GetArea(const Tri& T) {
 	return FVector::CrossProduct(T.A - T.B, T.A - T.C).Size() * 0.5f;
+}
+
+FVector Tri::GetCenter() const {
+	return (A + B + C) * ONE_THIRD;
 }
 
 bool Tri::IsAObscured() const {

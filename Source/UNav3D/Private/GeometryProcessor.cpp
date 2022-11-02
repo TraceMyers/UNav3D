@@ -147,15 +147,17 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
 	// Vertices[Indices[0]] = Tri0.A, Vertices[Indices[1]] = Tri0.B, Vertices[Indices[2]] = Tri0.C,
 	// Vertices[Indices[3]] = Tri1.A ... and so on
 	const uint32 VEnd = IndexCt - 3;
-	const FVector* Vertices = TMesh.Vertices;
+	FVector* Vertices = TMesh.Vertices;
+	TArray<TempTri> Tris;
 	for (uint16* IndexPtr = Indices; (IndexPtr - Indices) <= VEnd; ) {
-		const FVector& A = Vertices[*IndexPtr++];
-		const FVector& B = Vertices[*IndexPtr++];
-		const FVector& C = Vertices[*IndexPtr++];
-		Tri T(A, B, C);
-		TMesh.Tris.Add(T);
+		FVector* A = &Vertices[*IndexPtr++];
+		FVector* B = &Vertices[*IndexPtr++];
+		FVector* C = &Vertices[*IndexPtr++];
+		TempTri T(A, B, C);
+		Tris.Add(T);
 	}
 	TMesh.VertexCt = VertexCt;
+	TMesh.Grid.Init(TMesh, Tris);
 	
 	return GEOPROC_SUCCESS;
 }
@@ -229,18 +231,18 @@ void GeometryProcessor::GetIntersectGroups(
 }
 
 void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<TriMesh*>>& Groups) {
-	for (int i = 0; i < Groups.Num(); i++) {
-		TArray<TriMesh*>& Group = Groups[i];
-		FVector GroupBBoxMin;
-		FVector GroupBBoxMax;
-		Geometry::GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
-		for (int j = 0; j < Group.Num(); j++) {
-			TriMesh* CurTMesh = Group[j];
-			TArray<TriMesh*> OtherTMeshes = Group;
-			OtherTMeshes.Remove(CurTMesh);
-			Geometry::FlagObscuredTris(World, *CurTMesh, OtherTMeshes, GroupBBoxMin);
-		}
-	}
+	// for (int i = 0; i < Groups.Num(); i++) {
+	// 	TArray<TriMesh*>& Group = Groups[i];
+	// 	FVector GroupBBoxMin;
+	// 	FVector GroupBBoxMax;
+	// 	Geometry::GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
+	// 	for (int j = 0; j < Group.Num(); j++) {
+	// 		TriMesh* CurTMesh = Group[j];
+	// 		TArray<TriMesh*> OtherTMeshes = Group;
+	// 		OtherTMeshes.Remove(CurTMesh);
+	// 		Geometry::FlagObscuredTris(World, *CurTMesh, OtherTMeshes, GroupBBoxMin);
+	// 	}
+	// }
 }
 
 // this one's a bit long
@@ -254,19 +256,8 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 		TArray<TriMesh*>& Group = Groups[i];
 		TArray<TArray<UnstructuredPolygon>> UPolys; // one upoly per tri
 
-		FVector GroupBBoxMin;
-		FVector GroupBBoxMax;
-		Geometry::GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
-		const float BBoxDiagDist = FVector::Dist(GroupBBoxMin, GroupBBoxMax);
-		Geometry::PopulateUnstructuredPolygons(World, Group, UPolys, BBoxDiagDist);
+		Geometry::PopulateUnstructuredPolygons(Group, UPolys);
 		
-		// should be integrated to PopulateUnstructuredPolygons to help avoid cache misses OR put in inner loop below
-		// per tri after check num == 3 (changed to num == 0) to reduce calculations
-		if (i == 1) {
-			printf("hello\n");
-		}
-		Geometry::PopulatePolyEdgesFromTriEdges(World, Group, UPolys, BBoxDiagDist);
-
 		AllPolygons.Add(TArray<TArray<Polygon>>());
 		TArray<TArray<Polygon>>& GroupPolygons = AllPolygons.Last();
 		
@@ -279,9 +270,9 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 			
 			for (int k = 0; k < MeshUPolys.Num(); k++) {
 				const UnstructuredPolygon& UPoly = MeshUPolys[k];
-				Tri& T = TMesh.Tris[k];
+				Tri& T = TMesh.Grid[k];
 				
-				if (UPoly.Edges.Num() == 3) {
+				if (UPoly.Edges.Num() == 0) {
 					// if there are no intersections...
 					if (T.AllObscured()) {
 						// ...and all vertices are obscured, tri is enclosed -> cull

@@ -1,19 +1,37 @@
 ﻿#pragma once
 
+// Used before populating a TriGrid
+struct TempTri {
+	
+	TempTri(FVector* _A, FVector* _B, FVector* _C) :
+		A(_A), B(_B), C(_C)
+	{}
+
+	FVector GetCenter() const;
+	
+	FVector* A;	
+	FVector* B;
+	FVector* C;
+};
+
 // Triangle; saves space by storing references to vertices on the TriMesh.
 // Edges must be re-pointed if Tri's container reallocates
 struct Tri {
-	
-	Tri(const FVector& _A, const FVector& _B, const FVector& _C);
 
+	Tri();
+	
+	Tri(FVector& _A, FVector& _B, FVector& _C);
+	
 	// meant for use in constructor
-	static float GetLongestTriSidelen(const FVector& A, const FVector& B, const FVector& C);
+	static float GetLongestTriSidelenSq(const FVector& A, const FVector& B, const FVector& C);
 
 	// get the area of a triangle with vertices A, B, C
 	static float GetArea(const FVector& A, const FVector& B, const FVector& C);
 
 	// get the area of tri T
 	static float GetArea(const Tri& T);
+
+	FVector GetCenter() const;
 
 	// asking if this vertex is inside any other meshes; need to be set by Geometry::FlagObscuredTris() first
 	inline bool IsAObscured() const;
@@ -51,14 +69,12 @@ struct Tri {
 
 	void MarkForPolygon();
 
-	// 48 bytes
-	const FVector& A;
-	const FVector& B;
-	const FVector& C;
-	const FVector Normal;
+	FVector& A;
+	FVector& B;
+	FVector& C;
+	FVector Normal;
 	uint32 Flags; // only using 2 of the 4 bytes
-	// for faster intersection checking
-	const float LongestSidelen;
-	const float Area;
+	float Area; // for faster intersection checking
+	float LongestSidelenSq;
 	
 };

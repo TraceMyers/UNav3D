@@ -321,8 +321,8 @@ namespace Geometry {
 		}
 
 		bool Internal_DoTriMeshesIntersect(const TriMesh& TMeshA, const TriMesh& TMeshB) {
-			const TArray<Tri>& TMeshATris = TMeshA.Tris;
-			const TArray<Tri>& TMeshBTris = TMeshB.Tris;
+			const auto& TMeshATris = TMeshA.Grid;
+			const auto& TMeshBTris = TMeshB.Grid;
 			const int TMeshBTriCt = TMeshBTris.Num();
 			FVector POI;
 			float HitDistance;
@@ -331,9 +331,9 @@ namespace Geometry {
 				for (int j = 0; j < TMeshBTriCt; j++) {
 					const Tri& T1 = TMeshBTris[j];
 					// checking if it's possible they could intersect
-					const float Dist = FVector::Dist(T0.A, T1.A);
+					const float DistSq = FVector::DistSquared(T0.A, T1.A);
 					if (
-						(Dist < T0.LongestSidelen + T1.LongestSidelen)
+						(DistSq < T0.LongestSidelenSq + T1.LongestSidelenSq)
 						&& (
 							Internal_TriLineTrace(T0.A, T0.B, T1, POI, HitDistance)
 							|| Internal_TriLineTrace(T0.B, T0.C, T1, POI, HitDistance)
@@ -350,38 +350,8 @@ namespace Geometry {
 			return false;
 		}
 
-		// TODO: currently depends on a channel added in-project. will need to have the plugin create the channel...
-		// TODO: ... used here. Default channel result is ignore.
-		// void Internal_LineTraceThrough(
-		// 	const UWorld* World,
-		// 	const FCollisionQueryParams& Params,
-		// 	const FVector& TrStart,
-		// 	const FVector& TrEnd,
-		// 	TArray<MeshHit>& MHits,
-		// 	bool InvertDistance=false
-		// ) {
-		// 	TArray<FHitResult> HitResults;
-		// 	World->LineTraceMultiByChannel(HitResults, TrStart, TrEnd, ECC_GameTraceChannel1, Params);
-		// 	const float TraceDistance = FVector::Dist(TrStart, TrEnd);
-		// 	if (HitResults.Num() > 1) {
-		// 		printf("got multi\n");
-		// 	}
-		// 	for (int i = 0; i < HitResults.Num(); i++) {
-		// 		const FHitResult& Hit = HitResults[i];
-		// 		AActor* HitActor = Hit.GetActor();
-		// 		if (HitActor != nullptr) {
-		// 			const AStaticMeshActor* HitMesh = Cast<AStaticMeshActor>(HitActor);
-		// 			if (HitMesh != nullptr) {
-		// 				float Distance = Hit.Distance;
-		// 				if (InvertDistance) {
-		// 					Distance = TraceDistance - Distance;
-		// 				}
-		// 				MHits.Add(MeshHit(HitMesh, Hit.Location, Distance));	
-		// 			}	
-		// 		}
-		// 	}	
-		// }
-
+		// equivalent of LineTraceMulti, but targets only provided TriMeshes, goes both directions, and doesn't
+		// ignore an actor after one overlap/hit. currently significantly slower but has the needed features.
 		void Internal_LineTraceThrough(
 			const FVector& TrStart,
 			const FVector& TrEnd,
@@ -397,7 +367,9 @@ namespace Geometry {
 			const FVector OppDir = -Dir;
 			for (TriMesh* TMesh : TriMeshes) {
 				const AStaticMeshActor* MeshActor = TMesh->MeshActor;
-				for (Tri& T : TMesh->Tris) {
+				const auto& Tris = TMesh->Grid;
+				for (int i = 0; i < Tris.Num(); i++) {
+					const Tri& T = Tris[i];
 					if (Internal_Raycast(TrStart, Dir, Length, T, PointOfIntersection, HitDistance)) {
 						MHits.Add(MeshHit(MeshActor, PointOfIntersection, HitDistance));
 					}
@@ -512,24 +484,23 @@ namespace Geometry {
 		}
 		
 		// params should be set to complex and to ignore the mesh of the given tri; does NOT clear flags beforehand
-		// bool Internal_IsTriObscured(
-		// 	const UWorld* World,
-		// 	const FCollisionQueryParams& Params,
-		// 	Tri& T,
-		// 	float MinZ,
-		// 	MeshHitCounter& MHitCtr
-		// ) {
-		// 	if (Internal_IsPointObscured(World, Params, T.A, MinZ, MHitCtr)) {
-		// 		T.SetAObscured();
-		// 	}
-		// 	if (Internal_IsPointObscured(World, Params, T.B, MinZ, MHitCtr)) {
-		// 		T.SetBObscured();
-		// 	}
-		// 	if (Internal_IsPointObscured(World, Params, T.C, MinZ, MHitCtr)) {
-		// 		T.SetCObscured();
-		// 	}
-		// 	return T.AnyObscured();
-		// }
+		bool Internal_IsTriObscured(
+			Tri& T,
+			const TArray<TriMesh*>& OtherMeshes,
+			float MinZ,
+			MeshHitCounter& MHitCtr
+		) {
+			if (Internal_IsPointObscured(T.A, OtherMeshes, MinZ, MHitCtr)) {
+				T.SetAObscured();
+			}
+			if (Internal_IsPointObscured(T.B, OtherMeshes, MinZ, MHitCtr)) {
+				T.SetBObscured();
+			}
+			if (Internal_IsPointObscured(T.C, OtherMeshes, MinZ, MHitCtr)) {
+				T.SetCObscured();
+			}
+			return T.AnyObscured();
+		}
 
 		// if exists, find an intersection between tris, add PolyEdge to both polys
 		bool Internal_GetTriPairPolyEdge(
@@ -599,44 +570,21 @@ namespace Geometry {
 				PolyB.Edges.Add(P);
 				return true;
 			}
-			if (T1HitCt > 0 || T0HitCt > 0) {
-				printf("what?\n");
-			}
 			return false;
 		}
 
-		// flag polyedge points if they're enclosed within other meshes
-		// void Internal_FlagTriPairPolyEdge(
-		// 	const UWorld* World,
-		// 	const FCollisionQueryParams& Params,
-		// 	PolyEdge& PolyEdge0,
-		// 	PolyEdge& PolyEdge1,
-		// 	MeshHitCounter& MHitCtr,
-		// 	const float MinZ
-		// ) {
-		// 	// The edges are (mostly) identical, so if one has an obscured point, the other will, too
-		// 	if (Internal_IsPointObscured(World, Params, PolyEdge0.A, MinZ, MHitCtr)) {
-		// 		PolyEdge0.SetAEnclosed();	
-		// 		PolyEdge1.SetAEnclosed();	
-		// 	}
-		// 	if (Internal_IsPointObscured(World, Params, PolyEdge0.B, MinZ, MHitCtr)) {
-		// 		PolyEdge0.SetBEnclosed();
-		// 		PolyEdge1.SetBEnclosed();	
-		// 	}
-		// }
-
 		// finds intersections between triangles on meshes, creating PolyEdges for use in building polygons
 		void Internal_FindPolyEdges(
-			const TriMesh& TMeshA,
-			const TriMesh& TMeshB,
+			TriMesh& TMeshA,
+			TriMesh& TMeshB,
 			const TArray<TriMesh*>& OtherMeshes,
 			TArray<UnstructuredPolygon>& UPolysA,
 			TArray<UnstructuredPolygon>& UPolysB,
 			MeshHitCounter& MHitCtr,
 			const float BBoxDiagDist
 		) {
-			const TArray<Tri>& TrisA = TMeshA.Tris;
-			const TArray<Tri>& TrisB = TMeshB.Tris;
+			auto& TrisA = TMeshA.Grid;
+			auto& TrisB = TMeshB.Grid;
 			
 			FCollisionQueryParams Params;
 			Params.bTraceComplex = true;
@@ -647,9 +595,9 @@ namespace Geometry {
 				UnstructuredPolygon& PolyA = UPolysA[i];
 				for (int j = 0; j < TrisB.Num(); j++) {
 					const Tri& T1 = TrisB[j];
-					const float Dist = FVector::Dist(T0.A, T1.A);
+					const float Dist = FVector::DistSquared(T0.A, T1.A);
 					// if it's even possible they could intersect...
-					if (Dist <= T0.LongestSidelen + T1.LongestSidelen) {
+					if (Dist <= T0.LongestSidelenSq + T1.LongestSidelenSq) {
 						UnstructuredPolygon& PolyB = UPolysB[j];
 						// if an intersection between these triangles exists, put it in both polys
 						if (Internal_GetTriPairPolyEdge(T0, T1, PolyA, PolyB)) {
@@ -689,21 +637,21 @@ namespace Geometry {
 		void Internal_PopulatePolyEdgesFromTriEdges(
 			TriMesh& TMesh,
 			const TArray<TriMesh*>& OtherMeshes,
-			TArray<UnstructuredPolygon>& UPolysA,
+			TArray<UnstructuredPolygon>& UPolys,
 			float BBoxDiagDistance,
+			float MinZ,
 			MeshHitCounter& MHitCtr
 		) {
-			FCollisionQueryParams Params;
-			Params.bTraceComplex = true;
-			Params.bIgnoreBlocks = true;
 
-			TArray<Tri>& Tris = TMesh.Tris;
+			const auto& TriGrid = TMesh.Grid;
 			constexpr uint32 flags = PolyEdge::ON_EDGE_AB | PolyEdge::ON_EDGE_BC | PolyEdge::ON_EDGE_CA;
-			for (int i = 0; i < Tris.Num(); i++) {
-				if (i == 12) {
-					printf("hello, there\n");
+			for (int i = 0; i < TriGrid.Num(); i++) {
+				Tri& T = TriGrid[i];
+				if (UPolys[i].Edges.Num() == 0) {
+					// if there are no intersections, just check if the tri points are inside other meshes
+					Internal_IsTriObscured(T, OtherMeshes, MinZ, MHitCtr);
+					continue;
 				}
-				Tri& T = Tris[i];
 				PolyEdge PEdgeAB(T.A, T.B, flags);
 				const bool AObscured = Internal_GetObscuredDistances(
 					T.A, T.B, OtherMeshes, PEdgeAB.TrDropDistances, BBoxDiagDistance, MHitCtr
@@ -716,7 +664,7 @@ namespace Geometry {
 				const bool CObscured = Internal_GetObscuredDistances(
 					T.C, T.A, OtherMeshes, PEdgeCA.TrDropDistances, BBoxDiagDistance, MHitCtr
 				);
-				TArray<PolyEdge>& Edges = UPolysA[i].Edges;
+				TArray<PolyEdge>& Edges = UPolys[i].Edges;
 				if (AObscured) {
 					T.SetAObscured();
 					PEdgeAB.SetAEnclosed();
@@ -738,7 +686,7 @@ namespace Geometry {
 			}
 		}
 
-		// set meshes to respond to built-in line traces
+		// set meshes to respond to built-in line traces; currently unused
 		void Internal_SetMeshesOverlap(TArray<TriMesh>& TMeshes) {
 			for (int i = 0; i < TMeshes.Num(); i++) {
 				TMeshes[i].MeshActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(
@@ -748,7 +696,7 @@ namespace Geometry {
 			}
 		}
 		
-		// set meshes to respond to built-in line traces
+		// set meshes to respond to built-in line traces; currently unused
 		void Internal_SetMeshesOverlap(TArray<TriMesh*>& TMeshes) {
 			for (int i = 0; i < TMeshes.Num(); i++) {
 				TMeshes[i]->MeshActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(
@@ -758,7 +706,7 @@ namespace Geometry {
 			}
 		}
 		
-		// set meshes to ignore built-in line traces
+		// set meshes to ignore built-in line traces; currently unused
 		void Internal_SetMeshesIgnore(TArray<TriMesh>& TMeshes) {
 			for (int i = 0; i < TMeshes.Num(); i++) {
 				TMeshes[i].MeshActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(
@@ -768,7 +716,7 @@ namespace Geometry {
 			}
 		}
 		
-		// set meshes to ignore built-in line traces
+		// set meshes to ignore built-in line traces; currently unused
 		void Internal_SetMeshesIgnore(TArray<TriMesh*>& TMeshes) {
 			for (int i = 0; i < TMeshes.Num(); i++) {
 				TMeshes[i]->MeshActor->GetStaticMeshComponent()->SetCollisionResponseToChannel(
@@ -870,40 +818,57 @@ namespace Geometry {
 		}
 	}
 
-	void FlagObscuredTris(
-		const UWorld* World,
-		TriMesh& TMesh,
-		TArray<TriMesh*>& OtherTMeshes,
-		const FVector& GroupExtMin 
-	) {
-		MeshHitCounter MHitCtr(OtherTMeshes);
-		FCollisionQueryParams Params;
-		Params.bIgnoreBlocks = true;
-		Params.bTraceComplex = true;
-		const float MinZ = GroupExtMin.Z;
-
-		TArray<Tri>& Tris = TMesh.Tris;
-		Internal_SetMeshesOverlap(OtherTMeshes);
-		for (int i = 0; i < Tris.Num(); i++) {
-			// flags obscured vertices on tris, ignoring t/f output
-			// Internal_IsTriObscured(World, Params, Tris[i], MinZ, MHitCtr);
+	void GetAxisAlignedExtrema(const BoundingBox& BBox, FVector& Min, FVector& Max, float NudgeOutward) {
+		const FVector* BoxVerts = BBox.Vertices;
+		Min = BoxVerts[0];
+		Max = Min;
+		for (int j = 1; j < BoundingBox::VERTEX_CT; j++) {
+			const FVector& Vertex = BoxVerts[j];
+			if (Vertex.X < Min.X) {
+				Min.X = Vertex.X;
+			}
+			else if (Vertex.X > Max.X) {
+				Max.X = Vertex.X;
+			}
+			if (Vertex.Y < Min.Y) {
+				Min.Y = Vertex.Y;
+			}
+			else if (Vertex.Y > Max.Y) {
+				Max.Y = Vertex.Y;
+			}
+			if (Vertex.Z < Min.Z) {
+				Min.Z = Vertex.Z;
+			}
+			else if (Vertex.Z > Max.Z) {
+				Max.Z = Vertex.Z;
+			}
 		}
-		Internal_SetMeshesIgnore(OtherTMeshes);
+		if (NudgeOutward != 0.0f) {
+			const FVector Nudge(NudgeOutward, NudgeOutward, NudgeOutward);
+			Max += Nudge;
+			Min -= Nudge;
+		}
 	}
 
 	void PopulateUnstructuredPolygons(
-		const UWorld* World,
 		TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
-		const float BBoxDiagDist
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys
 	) {
+		FVector GroupBBoxMin;
+		FVector GroupBBoxMax;
+		GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
+		const float BBoxDiagDist = FVector::Dist(GroupBBoxMin, GroupBBoxMax);
+		const float MinZ = GroupBBoxMin.Z;
+		
 		const int GroupCt = Group.Num();
 		for (int i = 0; i < GroupCt; i++) {
 			GroupUPolys.Add(TArray<UnstructuredPolygon>());
 			TArray<UnstructuredPolygon>& UPolys = GroupUPolys[i];
-			// creating all of 
-			UPolys.Init(UnstructuredPolygon(), Group[i]->Tris.Num());
+			// creating an unstructured polygon per tri
+			UPolys.Init(UnstructuredPolygon(), Group[i]->Grid.Num());
 		}
+		// find all intersections between tris in this group and mark where those intersections are inside
+		// and where they are outside other meshes
 		for (int i = 0; i < GroupCt - 1; i++) {
 			TriMesh& TMeshA = *Group[i];
 			TArray<UnstructuredPolygon>& UPolysA = GroupUPolys[i];
@@ -914,28 +879,21 @@ namespace Geometry {
 				GroupExcludingAandB.Remove(&TMeshA);
 				GroupExcludingAandB.Remove(&TMeshB);
 				MeshHitCounter MHitCtr(GroupExcludingAandB);
-				// Internal_SetMeshesOverlap(GroupExcludingAandB);
-				Internal_FindPolyEdges(TMeshA, TMeshB, GroupExcludingAandB, UPolysA, UPolysB, MHitCtr, BBoxDiagDist);	
-				// Internal_SetMeshesIgnore(GroupExcludingAandB);
+				Internal_FindPolyEdges(
+					TMeshA, TMeshB, GroupExcludingAandB, UPolysA, UPolysB, MHitCtr, BBoxDiagDist
+				);	
 			}
-		}	
-	}
-
-	void PopulatePolyEdgesFromTriEdges(
-		const UWorld* World,
-		const TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
-		float BBoxDiagDistance
-	) {
-		for (int i = 0; i < Group.Num(); i++) {
+		}
+		// for any tri that has intersections, mark where the tri edges are inside and outside other meshes;
+		// if no intersections, just note which vertices are inside and which are outside
+		for (int i = 0; i < GroupCt; i++) {
 			TriMesh& TMesh = *Group[i];
 			TArray<TriMesh*> GroupExcludingThisMesh = Group;
 			GroupExcludingThisMesh.Remove(&TMesh);
 			MeshHitCounter MHitCtr(GroupExcludingThisMesh);
-			// Internal_SetMeshesOverlap(GroupExcludingThisMesh);
-			Internal_PopulatePolyEdgesFromTriEdges(TMesh, GroupExcludingThisMesh, GroupUPolys[i], BBoxDiagDistance, MHitCtr);
-			// Internal_SetMeshesIgnore(GroupExcludingThisMesh);
+			Internal_PopulatePolyEdgesFromTriEdges(
+				TMesh, GroupExcludingThisMesh, GroupUPolys[i], BBoxDiagDist, MinZ, MHitCtr
+			);
 		}
-		
 	}
 }
