@@ -17,6 +17,9 @@ namespace Geometry {
 	// Populates a BoundingBox from a UBoxComponent
 	void SetBoundingBox(BoundingBox& BBox, const UBoxComponent* BoxCmp);
 
+	// Populates a BoundingBox from a UNavMesh
+	void SetBoundingBox(UNavMesh& NMesh, const TArray<TriMesh*> Group);
+
 	// Checks whether or not the two bounding boxes overlap. Seemingly necessary to do this on our own for editor plugin.
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB);
 

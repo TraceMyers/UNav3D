@@ -8,6 +8,7 @@
 #include "Polygon.h"
 #include "Debug.h"
 #include "UNavMesh.h"
+#include "Containers/ArrayView.h"
 
 // TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until...
 // TODO: ... there is a good system in place to take that input from the user
@@ -68,11 +69,11 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateNavMeshes(
 	UNavDbg::PrintTriMeshIntersectGroups(IntersectGroups);
 	TArray<TArray<TArray<Polygon>>> Polygons;
 	
-	// TODO: refactor this a little where each Group is processed one at a time and put into a new trimesh..
-	// TODO: ... without the culled Tris, THEN build polygons
 	BuildPolygonsAtMeshIntersections(IntersectGroups, Polygons);
 
-	UNavDbg::DrawAllPolygons(World, Polygons);
+	// UNavDbg::DrawAllPolygons(World, Polygons);
+
+	FormMeshesFromGroups(IntersectGroups, Polygons, OutMeshes);
 	
 	// InMeshes.Empty();
 	return GEOPROC_SUCCESS;
@@ -257,23 +258,20 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 	for (int i = 0; i < Groups.Num(); i++) {
 		TArray<TriMesh*>& Group = Groups[i];
 		TArray<TArray<UnstructuredPolygon>> UPolys; // one upoly per tri
-
-		Geometry::PopulateUnstructuredPolygons(Group, UPolys);
-		
 		AllPolygons.Add(TArray<TArray<Polygon>>());
 		TArray<TArray<Polygon>>& GroupPolygons = AllPolygons.Last();
+
+		Geometry::PopulateUnstructuredPolygons(Group, UPolys);
 		
 		for (int j = 0; j < UPolys.Num(); j++) {
 			TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
 			TriMesh& TMesh = *Group[j];
-
 			GroupPolygons.Add(TArray<Polygon>());
 			TArray<Polygon>& TMeshPolygons = GroupPolygons.Last();
 			
 			for (int k = 0; k < MeshUPolys.Num(); k++) {
 				const UnstructuredPolygon& UPoly = MeshUPolys[k];
 				Tri& T = TMesh.Grid[k];
-				
 				if (UPoly.Edges.Num() == 0) {
 					// if there are no intersections...
 					if (T.AllObscured()) {
@@ -311,34 +309,72 @@ void GeometryProcessor::FormMeshesFromGroups(
 	for (int i = 0; i < Groups.Num(); i++) {
 		const auto& Group = Groups[i];
 
-		// reserving space for temp tris; will likely still be larger due to polygons being formed into more tris
+		// reserving space for temp tris and verts
 		int TriCt = 0;
+		int VertexCt = 0;
 		for (auto& TMesh : Group) {
-			TriCt += TMesh->Grid.Num();	
+			TriCt += TMesh->Grid.Num();
+			VertexCt += TMesh->VertexCt;
 		}
-		TArray<TempTri> TempTris;
-		TempTris.Reserve(TriCt);
-		
-		// create new temp (tarray) vertex buffer from the group buffers, excluding any vertices of culled or polygon tris
-		// create new temp tri buffer, add non culled/polygon tris
-		// create new temp tris, add vertices if needed or point them to existing vertices
-		// allocate vertex buffer, copy vertices in
-		// re-point temp tris to new buffer (should work with pointer math)
-		// create new UNavMesh with vertex buffer
-		// give UNavMesh.Grid itself and temp tris
-		// generate new (non-rotating) bounding box
-		
-		for (int j = 0; j < Group.Num(); j++) {
-			const auto& TMesh = Group[j];
-			const auto& Grid = TMesh->Grid;
-			for (int k = 0; k < Grid.Num(); k++) {
-				const auto& Tri = Grid[k];
-				if (!Tri.IsTriCull() && !Tri.IsTriMarkedForPolygon()) {
-					TempTris.Add(TempTri(&Tri.A, &Tri.B, &Tri.C));	
-				}
-			}
-			const auto& TMeshPolygons = Polygons[i][j];
+
+		// populating these data with Tris that are not changing
+		TArray<FIntVector> UnchangedTriVertexIndices;
+		UnchangedTriVertexIndices.Reserve(TriCt);
+		TArray<FVector*> UnchangedVertices;
+		UnchangedVertices.Reserve(VertexCt);
+		PopulateUnmarkedTriData(Group, UnchangedVertices, UnchangedTriVertexIndices);
+
+		// populating these data with Tris formed from new polygons
+		TArray<FIntVector> NewTriVertexIndices;
+		NewTriVertexIndices.Reserve((int)(TriCt * 0.2f)); // just guessing how much space to reserve here
+		TArray<FVector> NewVertices;
+		NewVertices.Reserve((int)(VertexCt * 0.2f));
+		const TArray<TArray<Polygon>>& GroupPolygons = Polygons[i];
+		for (auto& MeshPolygons : GroupPolygons) {
+			CreateNewTriData(MeshPolygons, NewVertices, NewTriVertexIndices);
 		}
+
+		// making new vertex buffer
+		const int UnchangedVertexCt = UnchangedVertices.Num();
+		const int NewVertexCt = NewVertices.Num();
+		const int NewVertCt = UnchangedVertexCt + NewVertexCt;
+		FVector* NewVertexBuffer = new FVector[NewVertCt];
+		if (NewVertexBuffer == nullptr) {
+			continue;
+		}
+		for (int j = 0; j < UnchangedVertexCt; j++) {
+			NewVertexBuffer[j] = *UnchangedVertices[j];
+		}
+		if (NewVertexCt > 0) {
+			memcpy(NewVertexBuffer + UnchangedVertexCt, NewVertices.GetData(), NewVertexCt * sizeof(FVector));
+		}
+
+		// making temp tri buffer
+		TArray<TempTri> NewTris;
+		for (int j = 0; j < UnchangedTriVertexIndices.Num(); j++) {
+			const FIntVector& VertexIndices = UnchangedTriVertexIndices[j];
+			NewTris.Add(TempTri(
+				&NewVertexBuffer[VertexIndices.X],
+				&NewVertexBuffer[VertexIndices.Y],
+				&NewVertexBuffer[VertexIndices.Z]
+			));
+		}
+		for (int j = 0; j < NewTriVertexIndices.Num(); j++) {
+			const FIntVector& VertexIndices = NewTriVertexIndices[j];
+			NewTris.Add(TempTri(
+				&NewVertexBuffer[VertexIndices.X + UnchangedVertexCt],
+				&NewVertexBuffer[VertexIndices.Y + UnchangedVertexCt],
+				&NewVertexBuffer[VertexIndices.Z + UnchangedVertexCt]
+			));
+		}
+
+		// init navmesh
+		NavMeshes.Add(UNavMesh());
+		UNavMesh& NavMesh = NavMeshes.Last();
+		NavMesh.Vertices = NewVertexBuffer;
+		NavMesh.VertexCt = NewVertCt;
+		Geometry::SetBoundingBox(NavMesh, Group);
+		NavMesh.Grid.Init(NavMesh, NewTris);
 	}	
 }
 
@@ -483,4 +519,204 @@ void GeometryProcessor::BuildPolygonsFromTri(
 		}
 	}
 	T.MarkForPolygon();	
+}
+
+void GeometryProcessor::PopulateUnmarkedTriData(
+	const TArray<TriMesh*>& Group,
+	TArray<FVector*>& TempVertices,
+	TArray<FIntVector>& TempTriVertexIndices
+) {
+	int SliceStart = 0;
+	for (int j = 0; j < Group.Num(); j++) {
+		const auto& TMesh = Group[j];
+		const auto& Grid = TMesh->Grid;
+
+		// finding first fully exposed tri on mesh to add, because Slicing the Vertex Array (in next step) requires
+		// at least one item in the slice
+		int VerticesAdded = 0;
+		int StartK = 0;
+		const int GridCt = Grid.Num();
+		for ( ; StartK < GridCt; StartK++) {
+			const auto& Tri = Grid[StartK];
+			if (!Tri.IsTriCull() && !Tri.IsTriMarkedForPolygon()) {
+				const int AIndex = TempVertices.Add(&Tri.A);
+				const int BIndex = TempVertices.Add(&Tri.B);
+				const int CIndex = TempVertices.Add(&Tri.C);
+				TempTriVertexIndices.Add(FIntVector(AIndex, BIndex, CIndex));
+				VerticesAdded += 3;
+				StartK++;
+				break;
+			}
+		}
+		if (StartK == Grid.Num()) {
+			SliceStart += VerticesAdded;
+			continue;	
+		}
+
+		// Adding vertices and temp tri placeholders. Slicing out only this mesh's vertices to search for existing
+		// ones because meshes don't share vertices. Using indices of vertices as placeholders for tris (instead of
+		// TempTri w/ FVector*) because the vertex array may reallocate when new vertices are added from the
+		// polygon->tri process.
+		for (int k = StartK; k < GridCt; k++) {
+			const auto& Tri = Grid[k];
+			if (!Tri.IsTriCull() && !Tri.IsTriMarkedForPolygon()) {
+				TArrayView<FVector*> TempVerticesSlice =
+					TArrayView<FVector*>(TempVertices).Slice(SliceStart, VerticesAdded);
+				int AIndex = TempVerticesSlice.Find(&Tri.A);
+				if (AIndex == -1) {
+					AIndex = TempVertices.Add(&Tri.A);
+					VerticesAdded++;
+				}
+				else {
+					AIndex += SliceStart;
+				}
+				int BIndex = TempVerticesSlice.Find(&Tri.B);
+				if (BIndex == -1) {
+					BIndex = TempVertices.Add(&Tri.B);
+					VerticesAdded++;
+				}
+				else {
+					BIndex += SliceStart;
+				}
+				int CIndex = TempVerticesSlice.Find(&Tri.C);
+				if (CIndex == -1) {
+					CIndex = TempVertices.Add(&Tri.C);
+					VerticesAdded++;
+				}
+				else {
+					CIndex += SliceStart;
+				}
+				TempTriVertexIndices.Add(FIntVector(AIndex, BIndex, CIndex));
+			}
+		}
+		SliceStart += VerticesAdded;
+	}
+}
+
+void GeometryProcessor::CreateNewTriData(
+	const TArray<Polygon>& Polygons,
+	TArray<FVector>& Vertices,
+	TArray<FIntVector>& TriVertexIndices
+) {
+	// for flagging vertices as unavailable after being used to create a tri
+	int UnavailableSz = 64; // likely more than necessary
+	bool* VertUnavailable = new bool[UnavailableSz];
+	if (VertUnavailable == nullptr) {
+		printf("GeometryProcessor::CreateNewTriData(), VertUnavailable alloc failure. returning\n");
+		return;
+	}
+	
+	for (auto& Polygon : Polygons) {
+		const auto& PolyVerts = Polygon.Vertices;
+		const int PolyVertCt = PolyVerts.Num();
+		if (PolyVertCt < 3) {
+			continue;
+		}
+		
+		// reallocating if there are more vertices in polygon than unavailable flags
+		if (PolyVertCt > UnavailableSz) {
+			delete VertUnavailable;
+			UnavailableSz = PolyVertCt;
+			VertUnavailable = new bool[UnavailableSz];
+			if (VertUnavailable == nullptr) {
+				printf("GeometryProcessor::CreateNewTriData(), VertUnavailable alloc failure. returning\n");
+				return;
+			}
+		}
+		memset(VertUnavailable, false, PolyVertCt * sizeof(bool));
+
+		const FVector PolygonNormal = FVector::CrossProduct(
+			PolyVerts[0] - PolyVerts[1], PolyVerts[2] - PolyVerts[1]
+		).GetUnsafeNormal();
+
+		const int AddVerticesOffset = Vertices.Num();
+		for (int StartIndex = 0; StartIndex < PolyVertCt; StartIndex++) {
+			TArray<FIntVector> TempTriVertexIndices;
+			int FailureCt = 0;
+			int AvailableCt = PolyVertCt;
+			bool FillSuccess = false;
+
+			// attempting to fill the polygon with triangles, starting at a different index until it works
+			int AIndex = StartIndex;
+			while (AvailableCt >= 3) {
+
+				// selecting vertices by availability. available-adjacent vertices are the only good candidates for
+				// forming a triangle
+				while (VertUnavailable[AIndex]) {
+					AIndex++;
+					if (AIndex >= PolyVertCt) {
+						AIndex = 0;
+					}
+				}
+				int BIndex = AIndex + 1;
+				if (BIndex >= PolyVertCt) {
+					BIndex = 0;
+				}
+				while (VertUnavailable[BIndex]) {
+					BIndex++;
+					if (BIndex >= PolyVertCt) {
+						BIndex = 0;
+					}
+				}
+				int CIndex = BIndex + 1;
+				if (CIndex >= PolyVertCt) {
+					CIndex = 0;
+				}
+				while (VertUnavailable[CIndex]) {
+					CIndex++;
+					if (CIndex >= PolyVertCt) {
+						CIndex = 0;
+					}
+				}
+
+				// TODO: debug failure cases. simple for simple case check cube & cane group
+				
+				// I believe this is the ear-clipping method of triangle-izing a polygon:
+				// If three adjacent vertices make a triangle, the middle vertex becomes unavailable, and an imaginary
+				// edge is formed between the first and third. the first and third become 'available-adjacent'.
+				// A, B, and C are three available-adjacent vertices.
+				const FVector& A = PolyVerts[AIndex];
+				const FVector& B = PolyVerts[BIndex];
+				const FVector& C = PolyVerts[CIndex];
+				const FVector U = A - B;
+				const FVector V = C - B;
+				// W is a vector on the polygon plane...
+				const FVector W = FVector::CrossProduct(V, PolygonNormal).GetUnsafeNormal();
+				// ... whose angle w/ V, Phi, is less than half pi iff ABC is an acute angle, which makes it suitable for
+				// making a triangle
+				const float CosPhi = FVector::DotProduct(U, W);
+				// if obtuse...
+				if (CosPhi <= 0) {
+					AIndex = AIndex == PolyVertCt - 1 ? 0 : AIndex + 1;
+					FailureCt++;
+					if (FailureCt >= AvailableCt) {
+						break;
+					}
+					continue;
+				}
+
+				// Triangle formation success!
+				FailureCt = 0;
+				// vertices will be added to Vertices in the same order as they exist in the polygon,
+				// so the indices to the future vertices are the indices to the polygon verts plus current Vertices.Num()
+				TempTriVertexIndices.Add(FIntVector(
+					AIndex + AddVerticesOffset, BIndex + AddVerticesOffset, CIndex + AddVerticesOffset
+				));
+				
+				if (AvailableCt == 3) {
+					FillSuccess = true;
+					break;
+				}
+				VertUnavailable[BIndex] = true;
+				AvailableCt--;
+			}
+			if (FillSuccess) {
+				Vertices.Append(PolyVerts);
+				TriVertexIndices.Append(TempTriVertexIndices);
+				break;
+			}
+			TempTriVertexIndices.Empty(TempTriVertexIndices.Num());	
+		}
+	}
+	delete VertUnavailable;
 }

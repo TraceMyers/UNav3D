@@ -6,6 +6,7 @@
 #include "TriMesh.h"
 #include "Tri.h"
 #include "Polygon.h"
+#include "UNavMesh.h"
 
 void UNavDbg::PrintTriMesh(const TriMesh& TMesh) {
 	printf(
@@ -51,6 +52,29 @@ void UNavDbg::DrawTriMeshBoundingBoxMulti(UWorld* World, const TArray<TriMesh>& 
 	}  
 }
 
+void UNavDbg::DrawBoundingBox(UWorld* World, const BoundingBox& BBox) {
+	for (int j = 0; j < BoundingBox::VERTEX_CT; j++) { 
+		ADebugMarker::Spawn(World, BBox.Vertices[j], DBG_DRAW_TIME);
+	} 
+	constexpr int StartIndices [4] {0, 4, 5, 6};  
+	constexpr int EndIndices [4][3] {{1, 2, 3}, {1, 2, 7}, {1, 3, 7}, {2, 3, 7}};  
+	const FVector* Vertices = BBox.Vertices;  
+	for (int j = 0; j < 4; j++) {
+		for (int k = 0; k < 3; k++) { 
+			DrawDebugLine(
+				World,
+				Vertices[StartIndices[j]],
+				Vertices[EndIndices[j][k]],
+				FColor::Magenta,
+				false,
+				DBG_DRAW_TIME,
+				0,
+				2.0f
+			); 
+		} 
+	}
+}
+
 void UNavDbg::DrawTriMeshVertices(const UWorld* World, const TriMesh& TMesh) {
 	for (int i = 0; i < TMesh.VertexCt; i++) { 
 		DrawDebugCircle(
@@ -72,36 +96,30 @@ void UNavDbg::DrawTriMeshVerticesMulti(const UWorld* World, const TArray<TriMesh
 	}  
 }
 
-void UNavDbg::DrawTriMeshTris(const UWorld* World, const TriMesh& TMesh) {
-	const auto& Tris = TMesh.Grid; 
+void UNavDbg::DrawTriGridTris(const UWorld* World, const TriGrid& Tris) {
 	for (int i = 0; i < Tris.Num(); i++) {
 		const auto& Tri = Tris[i];
 		if (Tri.IsTriCull()) {
 			DrawDebugLine(World, Tri.A, Tri.B, FColor::Red, false, DBG_DRAW_TIME, 0, 2.0f);
 			DrawDebugLine(World, Tri.B, Tri.C, FColor::Red, false, DBG_DRAW_TIME, 0, 2.0f); 
 			DrawDebugLine(World, Tri.C, Tri.A, FColor::Red, false, DBG_DRAW_TIME, 0, 2.0f);
-			// else {
-			// 	DrawDebugLine(World, Tri.A, Tri.B, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f); 
-			// 	DrawDebugLine(World, Tri.B, Tri.C, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
-			// 	DrawDebugLine(World, Tri.C, Tri.A, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
-			// }
 		}
-		// else if (Tri.IsBObscured()) {
-		// 	DrawDebugLine(World, Tri.A, Tri.B, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
-		// 	DrawDebugLine(World, Tri.B, Tri.C, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
-		// 	DrawDebugLine(World, Tri.C, Tri.A, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
-		// }
-		// else if (Tri.IsCObscured()) {
-		// 	DrawDebugLine(World, Tri.A, Tri.B, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
-		// 	DrawDebugLine(World, Tri.B, Tri.C, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
-		// 	DrawDebugLine(World, Tri.C, Tri.A, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
-		// }
-		// else {
-		// 	DrawDebugLine(World, Tri.A, Tri.B, FColor::Green, false, DBG_DRAW_TIME, 0, 2.0f);
-		// 	DrawDebugLine(World, Tri.B, Tri.C, FColor::Green, false, DBG_DRAW_TIME, 0, 2.0f);
-		// 	DrawDebugLine(World, Tri.C, Tri.A, FColor::Green, false, DBG_DRAW_TIME, 0, 2.0f);
-		// }
+		else if (Tri.IsAObscured() || Tri.IsBObscured() || Tri.IsCObscured()) {
+			DrawDebugLine(World, Tri.A, Tri.B, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
+			DrawDebugLine(World, Tri.B, Tri.C, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
+			DrawDebugLine(World, Tri.C, Tri.A, FColor::Magenta, false, DBG_DRAW_TIME, 0, 2.0f);
+		}
+		else {
+			DrawDebugLine(World, Tri.A, Tri.B, FColor::Green, false, DBG_DRAW_TIME, 0, 2.0f);
+			DrawDebugLine(World, Tri.B, Tri.C, FColor::Green, false, DBG_DRAW_TIME, 0, 2.0f);
+			DrawDebugLine(World, Tri.C, Tri.A, FColor::Green, false, DBG_DRAW_TIME, 0, 2.0f);
+		}
 	}
+}
+
+void UNavDbg::DrawTriMeshTris(const UWorld* World, const TriMesh& TMesh) {
+	const auto& Tris = TMesh.Grid; 
+	DrawTriGridTris(World, Tris);	
 }
 
 void UNavDbg::DrawTriMeshTrisMulti(const UWorld* World, const TArray<TriMesh>& TMeshes) {
@@ -109,6 +127,11 @@ void UNavDbg::DrawTriMeshTrisMulti(const UWorld* World, const TArray<TriMesh>& T
 		const TriMesh& TMesh = TMeshes[i];
 		DrawTriMeshTris(World, TMesh);
 	}  
+}
+
+void UNavDbg::DrawNavMeshTris(const UWorld* World, const UNavMesh& NMesh) {
+	auto& Grid = NMesh.Grid;
+	DrawTriGridTris(World, Grid);
 }
 
 void UNavDbg::PrintTriMeshIntersectGroups(const TArray<TArray<TriMesh*>> IntersectGroups) {

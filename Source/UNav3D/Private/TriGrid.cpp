@@ -1,14 +1,23 @@
 ﻿#include "TriGrid.h"
 #include "Tri.h"
 #include "Geometry.h"
+#include "UNavMesh.h"
 
 TriGrid::TriGrid() :
 	Container(nullptr), _Num(0), InitSuccess(false)
 {}
 
 void TriGrid::Init(const TriMesh& TMesh, const TArray<TempTri>& Tris) {
+	Init(TMesh.Box, Tris);	
+}
+
+void TriGrid::Init(const UNavMesh& NMesh, const TArray<TempTri>& Tris) {
+	Init(NMesh.Box, Tris);
+}
+
+void TriGrid::Init(const BoundingBox& BBox, const TArray<TempTri>& Tris) {
 	FVector Maximum;
-	Geometry::GetAxisAlignedExtrema(TMesh.Box, Minimum, Maximum);
+	Geometry::GetAxisAlignedExtrema(BBox, Minimum, Maximum);
 	FVector Dimensions = Maximum - Minimum;
 
 	// nudging the container containing the tris outward by .05% of its size
@@ -187,4 +196,5 @@ bool TriGrid::WorldToGrid(const FVector& WorldPosition, FIntVector& GridPosition
 	}
 	return true;
 }
+
 

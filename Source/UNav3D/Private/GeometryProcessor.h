@@ -87,5 +87,17 @@ private:
 		TArray<Polygon>& TMeshPolygons,
 		int TriIndex
 	);
+
+	static void PopulateUnmarkedTriData(
+		const TArray<TriMesh*>& Group,
+		TArray<FVector*>& Vertices,
+		TArray<FIntVector>& TriVertexIndices
+	);
+
+	static void CreateNewTriData(
+		const TArray<Polygon>& Polygons,
+		TArray<FVector>& Vertices,
+		TArray<FIntVector>& TriVertexIndices
+	);
 };
 

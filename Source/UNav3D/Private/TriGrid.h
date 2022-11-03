@@ -3,6 +3,8 @@
 
 struct TriMesh;
 struct TempTri;
+struct UNavMesh;
+struct BoundingBox;
 
 struct TriBox {
 	
@@ -97,6 +99,8 @@ public:
 	TriGrid();
 	
 	void Init(const TriMesh& TMesh, const TArray<TempTri>& Tris);
+	
+	void Init(const UNavMesh& NMesh, const TArray<TempTri>& Tris);
 
 	void Reset();
 	
@@ -115,6 +119,8 @@ private:
 	inline void SetOutgoing(const FIntVector& GridPos);
 	
 	bool WorldToGrid(const FVector& WorldPosition, FIntVector& GridPosition) const;
+
+	void Init(const BoundingBox& BBox, const TArray<TempTri>& Tris);
 	
 	static constexpr int CONTAINER_SIDELEN = 8;
 

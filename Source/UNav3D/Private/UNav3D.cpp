@@ -81,11 +81,15 @@ void FUNav3DModule::PluginButtonClicked(){
 
 	TArray<UNavMesh> NavMeshes;
 	GeomProcessor.PopulateNavMeshes(World, TMeshes, NavMeshes);
+	for (auto& NMesh : NavMeshes) {
+		UNavDbg::DrawBoundingBox(World, NMesh.Box);
+		UNavDbg::DrawNavMeshTris(World, NMesh);
+	}
 
 #ifdef UNAV_DBG
 	for (int i = 0; i < TMeshes.Num(); i++) {
 		TriMesh& TMesh = TMeshes[i];
-		UNavDbg::DrawTriMeshTris(World, TMesh);
+		// UNavDbg::DrawTriMeshTris(World, TMesh);
 		// UNavDbg::DrawTriMeshVertices(World, TMesh);
 	}
 #endif

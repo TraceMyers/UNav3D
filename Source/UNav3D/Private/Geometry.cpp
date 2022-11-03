@@ -2,6 +2,7 @@
 #include "TriMesh.h"
 #include "Tri.h"
 #include "Polygon.h"
+#include "UNavMesh.h"
 #include "Components/BoxComponent.h"
 #include "Datasmith/DatasmithCore/Public/DatasmithDefinitions.h"
 #include "Engine/StaticMeshActor.h"
@@ -92,7 +93,40 @@ namespace Geometry {
 			TMap<AStaticMeshActor*, int> MeshToCt;
 			TArray<AStaticMeshActor*> Keys;
 			
-		};	
+		};
+
+		void Internal_SetBBoxAfterVertices(BoundingBox& BBox) {
+			for (int i = 0; i < BoundingBox::FACE_CT; i++) {
+				const int* SideFaceIndices = BBoxFaceIndices[i];
+				const FVector& VertA = BBox.Vertices[SideFaceIndices[0]];
+				const FVector& VertB = BBox.Vertices[SideFaceIndices[1]];
+				const FVector& VertC = BBox.Vertices[SideFaceIndices[2]];
+				BBox.FaceNormals[i] = FVector::CrossProduct(VertB - VertA, VertC - VertA).GetUnsafeNormal();
+			}
+			const FVector& RefPoint = BBox.Vertices[0];
+			for (int i = 0; i < 3; i++) {
+				FVector& OverlapCheckVector = BBox.OverlapCheckVectors[i];
+				OverlapCheckVector = BBox.Vertices[i + 1] - RefPoint;
+				BBox.OverlapCheckSqMags[i] = FVector::DotProduct(OverlapCheckVector, OverlapCheckVector);
+			}
+			BBox.DiagDistance = FVector::Dist(BBox.Vertices[0], BBox.Vertices[7]);
+		}
+
+		void Internal_SetBoundingBoxFromExtrema(
+			BoundingBox& BBox,
+			const FVector& Min,
+			const FVector& Max
+		) {
+			BBox.Vertices[0] = Min;
+			BBox.Vertices[1] = FVector(Max.X, Min.Y, Min.Z);
+			BBox.Vertices[2] = FVector(Min.X, Max.Y, Min.Z);
+			BBox.Vertices[3] = FVector(Min.X, Min.Y, Max.Z);
+			BBox.Vertices[4] = FVector(Max.X, Max.Y, Min.Z);
+			BBox.Vertices[5] = FVector(Max.X, Min.Y, Max.Z);
+			BBox.Vertices[6] = FVector(Min.X, Max.Y, Max.Z);
+			BBox.Vertices[7] = Max;
+			Internal_SetBBoxAfterVertices(BBox);
+		}
 		
 		// populate BBox with vertices and precomputed overlap-checking values
 		// This implementation of a bounding box includes rotations, which makes it a little more computationally
@@ -117,20 +151,7 @@ namespace Geometry {
 					BBox.Vertices[i] = TForm.TransformPositionNoScale(BaseExtent[i] * Extent);
 				}
 			}
-			for (int i = 0; i < BoundingBox::FACE_CT; i++) {
-				const int* SideFaceIndices = BBoxFaceIndices[i];
-				const FVector& VertA = BBox.Vertices[SideFaceIndices[0]];
-				const FVector& VertB = BBox.Vertices[SideFaceIndices[1]];
-				const FVector& VertC = BBox.Vertices[SideFaceIndices[2]];
-				BBox.FaceNormals[i] = FVector::CrossProduct(VertB - VertA, VertC - VertA).GetUnsafeNormal();
-			}
-			const FVector& RefPoint = BBox.Vertices[0];
-			for (int i = 0; i < 3; i++) {
-				FVector& OverlapCheckVector = BBox.OverlapCheckVectors[i];
-				OverlapCheckVector = BBox.Vertices[i + 1] - RefPoint;
-				BBox.OverlapCheckSqMags[i] = FVector::DotProduct(OverlapCheckVector, OverlapCheckVector);
-			}
-			BBox.DiagDistance = FVector::Dist(BBox.Vertices[0], BBox.Vertices[7]);
+			Internal_SetBBoxAfterVertices(BBox);
 		}
 		
 		// If the points were all on a line, you would only need to check magnitude; implicit scaling by cos(theta) in
@@ -742,6 +763,13 @@ namespace Geometry {
 		const FVector Extent = BoxCmp->GetScaledBoxExtent();
 		const FTransform TForm = BoxCmp->GetComponentTransform();
 		Internal_SetBoundingBox(BBox, Extent, TForm, FVector::ZeroVector, false);	
+	}
+
+	void SetBoundingBox(UNavMesh& NMesh, const TArray<TriMesh*> Group) {
+		FVector Min;
+		FVector Max;
+		GetGroupExtrema(Group, Min, Max);
+		Internal_SetBoundingBoxFromExtrema(NMesh.Box, Min, Max);	
 	}
 
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB) {

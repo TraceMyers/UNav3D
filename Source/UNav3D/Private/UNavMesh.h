@@ -15,6 +15,7 @@ struct UNavMesh {
 	void ResetVertexData();
 
 	TArray<AStaticMeshActor*> MeshActors;
+	TArray<BoundingBox> ActorBoxes;
 	BoundingBox Box;
 	int VertexCt;
 	FVector* Vertices;
