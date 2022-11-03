@@ -12,10 +12,7 @@ TriMesh::TriMesh(const TriMesh& OtherMesh) {
 }
 
 TriMesh::~TriMesh() {
-	if (Vertices != nullptr) {
-		delete Vertices;
-		Vertices = nullptr;
-	}
+	ResetVertexData();
 }
 
 // checking of the mesh actors are the same provides a tiny bit of debugging value

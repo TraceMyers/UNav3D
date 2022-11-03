@@ -595,14 +595,17 @@ namespace Geometry {
 				UnstructuredPolygon& PolyA = UPolysA[i];
 				for (int j = 0; j < TrisB.Num(); j++) {
 					const Tri& T1 = TrisB[j];
-					const float Dist = FVector::DistSquared(T0.A, T1.A);
+					
+					const float DistSq = FVector::DistSquared(T0.A, T1.A);
 					// if it's even possible they could intersect...
-					if (Dist <= T0.LongestSidelenSq + T1.LongestSidelenSq) {
+					if (DistSq <= T0.LongestSidelenSq + T1.LongestSidelenSq) {
 						UnstructuredPolygon& PolyB = UPolysB[j];
+						
 						// if an intersection between these triangles exists, put it in both polys
 						if (Internal_GetTriPairPolyEdge(T0, T1, PolyA, PolyB)) {
 							PolyEdge& PolyEdge0 = PolyA.Edges.Last();
 							PolyEdge& PolyEdge1 = PolyB.Edges.Last();
+							
 							// check where the edge line segment is inside and outside all other meshes to help
 							// with polygon creation
 							const bool AEnclosed = Internal_GetObscuredDistances(

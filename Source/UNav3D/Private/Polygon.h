@@ -61,5 +61,6 @@ struct PolyNode {
 
 // a collection of tri-on-tri intersections, per tri
 struct UnstructuredPolygon {
-	TArray<PolyEdge> Edges;	
+	TArray<PolyEdge> Edges;
+	int TriIndex;
 };

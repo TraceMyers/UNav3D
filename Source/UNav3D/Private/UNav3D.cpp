@@ -7,11 +7,9 @@
 #include "Kismet/GameplayStatics.h"
 #include "Misc/ScopedSlowTask.h"
 #include "Debug.h"
-#include "Engine/StaticMeshActor.h"
-#include "DebugMarker.h"
 #include "GeometryProcessor.h"
-#include "DrawDebugHelpers.h"
 #include "TriMesh.h"
+#include "UNavMesh.h"
 
 // using the default windows package define; would be better to determine this
 #define _WIN32_WINNT_WIN10_TH2 0
@@ -81,8 +79,8 @@ void FUNav3DModule::PluginButtonClicked(){
 		return;
 	}
 
-	TArray<TriMesh> ReformedTMeshes;
-	GeomProcessor.ReformTriMeshes(World, TMeshes, ReformedTMeshes);
+	TArray<UNavMesh> NavMeshes;
+	GeomProcessor.PopulateNavMeshes(World, TMeshes, NavMeshes);
 
 #ifdef UNAV_DBG
 	for (int i = 0; i < TMeshes.Num(); i++) {
@@ -96,8 +94,8 @@ void FUNav3DModule::PluginButtonClicked(){
 	for (int i = 0; i < TMeshes.Num(); i++) {
 		TMeshes[i].ResetVertexData();
 	}
-	for (int i = 0; i < ReformedTMeshes.Num(); i++) {
-		ReformedTMeshes[i].ResetVertexData();
+	for (int i = 0; i < NavMeshes.Num(); i++) {
+		NavMeshes[i].ResetVertexData();
 	}
 }
 

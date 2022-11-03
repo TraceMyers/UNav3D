@@ -7,6 +7,7 @@ struct Tri;
 struct UnstructuredPolygon;
 struct PolyNode;
 struct Polygon;
+struct UNavMesh;
 
 class GeometryProcessor {
 	
@@ -25,11 +26,11 @@ public:
 	GEOPROC_RESPONSE PopulateTriMesh(TriMesh& TMesh, bool DoTransform=true) const;
 
 	// Takes Populated TriMeshes, groups them by overlap, and reforms the overlapped meshes into continuous meshes
-	// Populates OutMeshes, Empties InMeshes
-	GEOPROC_RESPONSE ReformTriMeshes(
+	// Populates OutMeshes with new
+	static GEOPROC_RESPONSE PopulateNavMeshes(
 		const UWorld* World,
 		TArray<TriMesh>& InMeshes,
-		TArray<TriMesh>& OutMeshes
+		TArray<UNavMesh>& OutMeshes
 	);
 
 private:
@@ -59,14 +60,32 @@ private:
 
 	// Find where meshes intersect and build polygons out of the exposed portions of tris
 	static void BuildPolygonsAtMeshIntersections(
-		const UWorld* World,
 		TArray<TArray<TriMesh*>>& Groups,
 		TArray<TArray<TArray<Polygon>>>& Polygons
 	);
 
-	// 
+	static void FormMeshesFromGroups(
+		TArray<TArray<TriMesh*>>& Groups,
+		TArray<TArray<TArray<Polygon>>>& Polygons,
+		TArray<UNavMesh>& NavMeshes
+	);
+
+	// each edge (intersections and tri edges) on a tri has points along it which mark where the edge
+	// is inside and where it's outside of other meshes. those points *should* link up with points on
+	// other edges, and exposed sections should link up to form polygons. this function creates nodes
+	// and links them together into graphs
 	static void PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<PolyNode>& PolygonNodes);
 
+	// helper to PopulateNodes that searches for whether or not nodes exist at A and B first, adds
+	// if not, and links them
 	static void AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, const FVector& B);
+
+	// makes n polygons given n closed loop graphs created by intersections + edges on a tri
+	static void BuildPolygonsFromTri(
+		Tri& T,
+		TArray<PolyNode>& PolygonNodes,
+		TArray<Polygon>& TMeshPolygons,
+		int TriIndex
+	);
 };
 

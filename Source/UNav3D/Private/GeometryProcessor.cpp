@@ -7,6 +7,7 @@
 #include "Tri.h"
 #include "Polygon.h"
 #include "Debug.h"
+#include "UNavMesh.h"
 
 // TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until...
 // TODO: ... there is a good system in place to take that input from the user
@@ -55,10 +56,10 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(TriMesh& 
 }
 
 // Does not group Mesh A and Mesh B if Mesh A is entirely inside MeshB, unless Mesh C intersects both
-GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
+GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateNavMeshes(
 	const UWorld* World,
 	TArray<TriMesh>& InMeshes,
-	TArray<TriMesh>& OutMeshes
+	TArray<UNavMesh>& OutMeshes
 ) {
 	OutMeshes.Reserve(InMeshes.Num());
 	TArray<TArray<TriMesh*>> IntersectGroups;
@@ -66,7 +67,10 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::ReformTriMeshes(
 	GetIntersectGroups(IntersectGroups, InMeshes);
 	UNavDbg::PrintTriMeshIntersectGroups(IntersectGroups);
 	TArray<TArray<TArray<Polygon>>> Polygons;
-	BuildPolygonsAtMeshIntersections(World, IntersectGroups, Polygons);
+	
+	// TODO: refactor this a little where each Group is processed one at a time and put into a new trimesh..
+	// TODO: ... without the culled Tris, THEN build polygons
+	BuildPolygonsAtMeshIntersections(IntersectGroups, Polygons);
 
 	UNavDbg::DrawAllPolygons(World, Polygons);
 	
@@ -247,11 +251,9 @@ void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<TriM
 
 // this one's a bit long
 void GeometryProcessor::BuildPolygonsAtMeshIntersections(
-	const UWorld* World,
 	TArray<TArray<TriMesh*>>& Groups,
 	TArray<TArray<TArray<Polygon>>>& AllPolygons
 ) {
-
 	for (int i = 0; i < Groups.Num(); i++) {
 		TArray<TriMesh*>& Group = Groups[i];
 		TArray<TArray<UnstructuredPolygon>> UPolys; // one upoly per tri
@@ -281,78 +283,63 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 					else if (T.AnyObscured()) {
 						// ... and 0 < n < 3 of the vertices are obscured, something has gone wrong
 						T.MarkProblemCase();
+						T.MarkForCull();
 					}	
 					continue;
 				}
 
 				TArray<PolyNode> PolygonNodes;
+				
+				// creating graphs where edges (intersections and tri edges) connect, and where they're visible
 				PopulateNodes(T, UPoly, PolygonNodes);
 				
-				// each tri might come out with more than one polygon; for example, a set of intersections in the center
-				// of the tri that do not touch tri edges - one outside, one inside; but, we start with one
-				// add if ever touches edge, else subtract unless enclosed by subtract polygon
-				const int NodeCt = PolygonNodes.Num();
-				if (NodeCt == 0) {
-					T.MarkForCull();
-					continue;
-				}
-
-				for (int m = 0; m < NodeCt; m++) {
-					if (PolygonNodes[m].Edges.Num() % 2 == 1) {
-						T.MarkForCull();
-						goto BUILDPOLY_NEXT;
-					}
-				}
+				BuildPolygonsFromTri(T, PolygonNodes, TMeshPolygons, k);
 				
-				for (int StartIndex = 0; StartIndex < NodeCt; ) {
-					PolyNode& StartNode = PolygonNodes[StartIndex];
-					TArray<int>* EdgeIndices = &StartNode.Edges;
-					// check to make sure the node isn't exhausted
-					if (EdgeIndices->Num() == 0) {
-						StartIndex++;
-						continue;
-					}
-					
-					Polygon BuildingPolygon(k);
-					BuildingPolygon.Vertices.Add(StartNode.Location);
-					int PrevIndex = StartIndex;
-					while (true) {
-						const int EdgeIndex = (*EdgeIndices)[0];
-						if (EdgeIndex == StartIndex) {
-							EdgeIndices->RemoveAt(0, 1, false);
-							const int SNIndexOfEdge = StartNode.Edges.Find(PrevIndex);
-							if (SNIndexOfEdge != -1) {
-								StartNode.Edges.RemoveAt(SNIndexOfEdge, 1, false);
-							}
-							else {
-								printf("polygon build error: can't find start index at end\n");
-							}
-							TMeshPolygons.Add(BuildingPolygon);
-							break;
-						}
-						// connect to another node
-						PolyNode& EdgeNode = PolygonNodes[EdgeIndex];
-						BuildingPolygon.Vertices.Add(EdgeNode.Location);
-
-						// remove the connection both ways
-						EdgeIndices->RemoveAt(0, 1, false);
-						if (EdgeNode.Edges.Num() <= 1 || EdgeNode.Edges.Find(PrevIndex) == -1) {
-							printf("polygon build error: num() <= 1 or can't find previndex\n");
-							T.MarkForCull();
-							goto BUILDPOLY_NEXT;
-						}
-						EdgeNode.Edges.RemoveSingle(PrevIndex);
-
-						// move on to next node
-						EdgeIndices = &EdgeNode.Edges;
-						PrevIndex = EdgeIndex;
-					}
-				}
-				T.MarkForPolygon();
-				BUILDPOLY_NEXT: ;
+				// TODO: each tri might come out with more than one polygon; for example, a set of intersections in the center...
+				// TODO: ... of the tri that do not touch tri edges - one outside, one inside; but, we start with one...
+				// TODO: ... add if ever touches edge, else subtract unless enclosed by subtract polygon
 			}
 		}
 	}
+}
+
+void GeometryProcessor::FormMeshesFromGroups(
+	TArray<TArray<TriMesh*>>& Groups,
+	TArray<TArray<TArray<Polygon>>>& Polygons,
+	TArray<UNavMesh>& NavMeshes
+) {
+	for (int i = 0; i < Groups.Num(); i++) {
+		const auto& Group = Groups[i];
+
+		// reserving space for temp tris; will likely still be larger due to polygons being formed into more tris
+		int TriCt = 0;
+		for (auto& TMesh : Group) {
+			TriCt += TMesh->Grid.Num();	
+		}
+		TArray<TempTri> TempTris;
+		TempTris.Reserve(TriCt);
+		
+		// create new temp (tarray) vertex buffer from the group buffers, excluding any vertices of culled or polygon tris
+		// create new temp tri buffer, add non culled/polygon tris
+		// create new temp tris, add vertices if needed or point them to existing vertices
+		// allocate vertex buffer, copy vertices in
+		// re-point temp tris to new buffer (should work with pointer math)
+		// create new UNavMesh with vertex buffer
+		// give UNavMesh.Grid itself and temp tris
+		// generate new (non-rotating) bounding box
+		
+		for (int j = 0; j < Group.Num(); j++) {
+			const auto& TMesh = Group[j];
+			const auto& Grid = TMesh->Grid;
+			for (int k = 0; k < Grid.Num(); k++) {
+				const auto& Tri = Grid[k];
+				if (!Tri.IsTriCull() && !Tri.IsTriMarkedForPolygon()) {
+					TempTris.Add(TempTri(&Tri.A, &Tri.B, &Tri.C));	
+				}
+			}
+			const auto& TMeshPolygons = Polygons[i][j];
+		}
+	}	
 }
 
 void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<PolyNode>& PolygonNodes) {
@@ -368,7 +355,7 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 			continue;
 		}
 
-		// TODO: probably better to save the position than the distance
+		// NOTE: would be faster but much more data loaded at once to just store positions rather than distances
 		FVector StartLoc;
 		int start_j;
 		const FVector Dir = (PEdge.B - PEdge.A).GetUnsafeNormal();
@@ -430,4 +417,70 @@ void GeometryProcessor::AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, 
 	ADDPOLY_LINK:
 	Nodes[i0].Edges.Add(i1);
 	Nodes[i1].Edges.Add(i0);
+}
+
+void GeometryProcessor::BuildPolygonsFromTri(
+	Tri& T,
+	TArray<PolyNode>& PolygonNodes,
+	TArray<Polygon>& TMeshPolygons,
+	int TriIndex
+) {
+	// if no nodes were made or the links aren't made properly, this tri could be a problem child, or it could
+	// simply have intersections but still be fully enclosed in another mesh
+	const int NodeCt = PolygonNodes.Num();
+	if (NodeCt == 0) {
+		T.MarkForCull();
+		return;
+	}
+	for (int m = 0; m < NodeCt; m++) {
+		if (PolygonNodes[m].Edges.Num() % 2 == 1) {
+			T.MarkForCull();
+			return;
+		}
+	}
+	// if the tri makes it here, its PolygonNodes array is fairly likely composed of one or more closed
+	// loops that can be used to form polygon(s)
+	for (int StartIndex = 0; StartIndex < NodeCt; ) {
+		PolyNode& StartNode = PolygonNodes[StartIndex];
+		TArray<int>* EdgeIndices = &StartNode.Edges;
+		
+		// check to make sure the node isn't exhausted
+		if (EdgeIndices->Num() == 0) {
+			StartIndex++;
+			continue;
+		}
+		
+		Polygon BuildingPolygon(TriIndex);
+		BuildingPolygon.Vertices.Add(StartNode.Location);
+		int PrevIndex = StartIndex;
+		while (true) {
+			const int EdgeIndex = (*EdgeIndices)[0];
+			if (EdgeIndex == StartIndex) {
+				// end of polygon
+				EdgeIndices->RemoveAt(0, 1, false);
+				const int SNIndexOfEdge = StartNode.Edges.Find(PrevIndex);
+				if (SNIndexOfEdge != -1) {
+					StartNode.Edges.RemoveAt(SNIndexOfEdge, 1, false);
+				}
+				TMeshPolygons.Add(BuildingPolygon);
+				break;
+			}
+			// connect to another node
+			PolyNode& EdgeNode = PolygonNodes[EdgeIndex];
+			BuildingPolygon.Vertices.Add(EdgeNode.Location);
+
+			// remove the connection both ways
+			EdgeIndices->RemoveAt(0, 1, false);
+			if (EdgeNode.Edges.Num() <= 1 || EdgeNode.Edges.Find(PrevIndex) == -1) {
+				T.MarkForCull();
+				return;
+			}
+			EdgeNode.Edges.RemoveSingle(PrevIndex);
+
+			// move on to next node
+			EdgeIndices = &EdgeNode.Edges;
+			PrevIndex = EdgeIndex;
+		}
+	}
+	T.MarkForPolygon();	
 }

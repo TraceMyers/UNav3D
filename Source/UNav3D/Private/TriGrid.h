@@ -85,7 +85,8 @@ private:
 	int _Num;
 	int CurBox;
 	int CurIndex;
-	TriBox Boxes[27];
+	// TODO: this needs to be a TArray to account for the fact that a triangle may span more than 27 boxes
+	TriBox Boxes[27]; 
 	
 };
 

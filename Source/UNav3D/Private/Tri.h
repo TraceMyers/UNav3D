@@ -74,7 +74,8 @@ struct Tri {
 	FVector& C;
 	FVector Normal;
 	uint32 Flags; // only using 2 of the 4 bytes
-	float Area; // for faster intersection checking
+	// -- for faster intersection checking --
+	float Area; 
 	float LongestSidelenSq;
 	
 };
