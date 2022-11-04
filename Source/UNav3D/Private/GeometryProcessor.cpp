@@ -9,6 +9,7 @@
 #include "Debug.h"
 #include "UNavMesh.h"
 #include "Containers/ArrayView.h"
+#include "string.h"
 
 // TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until...
 // TODO: ... there is a good system in place to take that input from the user
@@ -330,7 +331,12 @@ void GeometryProcessor::FormMeshesFromGroups(
 		TArray<FVector> NewVertices;
 		NewVertices.Reserve((int)(VertexCt * 0.2f));
 		const TArray<TArray<Polygon>>& GroupPolygons = Polygons[i];
-		for (auto& MeshPolygons : GroupPolygons) {
+		for (int j = 0; j < GroupPolygons.Num(); j++) {
+			auto& TMesh = Group[j];
+			if (strcmp(TCHAR_TO_ANSI(*TMesh->MeshActor->GetName()), "DebugMarkerMesh2_2") == 0) {
+				printf("hello\n");
+			}
+			auto& MeshPolygons = GroupPolygons[j];
 			CreateNewTriData(MeshPolygons, NewVertices, NewTriVertexIndices);
 		}
 
@@ -498,6 +504,7 @@ void GeometryProcessor::BuildPolygonsFromTri(
 				if (SNIndexOfEdge != -1) {
 					StartNode.Edges.RemoveAt(SNIndexOfEdge, 1, false);
 				}
+				BuildingPolygon.Normal = &T.Normal;
 				TMeshPolygons.Add(BuildingPolygon);
 				break;
 			}
@@ -605,8 +612,12 @@ void GeometryProcessor::CreateNewTriData(
 		printf("GeometryProcessor::CreateNewTriData(), VertUnavailable alloc failure. returning\n");
 		return;
 	}
-	
+	int m = 0;	
 	for (auto& Polygon : Polygons) {
+		if (m == 6) {
+			printf("hello\n");
+		}
+		m++;
 		const auto& PolyVerts = Polygon.Vertices;
 		const int PolyVertCt = PolyVerts.Num();
 		if (PolyVertCt < 3) {
@@ -623,18 +634,15 @@ void GeometryProcessor::CreateNewTriData(
 				return;
 			}
 		}
-		memset(VertUnavailable, false, PolyVertCt * sizeof(bool));
-
-		const FVector PolygonNormal = FVector::CrossProduct(
-			PolyVerts[0] - PolyVerts[1], PolyVerts[2] - PolyVerts[1]
-		).GetUnsafeNormal();
-
 		const int AddVerticesOffset = Vertices.Num();
+		FVector& PolygonNormal = *Polygon.Normal;
+		
+		memset(VertUnavailable, false, PolyVertCt * sizeof(bool));
+		bool FillSuccess = false;
 		for (int StartIndex = 0; StartIndex < PolyVertCt; StartIndex++) {
 			TArray<FIntVector> TempTriVertexIndices;
 			int FailureCt = 0;
 			int AvailableCt = PolyVertCt;
-			bool FillSuccess = false;
 
 			// attempting to fill the polygon with triangles, starting at a different index until it works
 			int AIndex = StartIndex;
@@ -678,14 +686,14 @@ void GeometryProcessor::CreateNewTriData(
 				const FVector& A = PolyVerts[AIndex];
 				const FVector& B = PolyVerts[BIndex];
 				const FVector& C = PolyVerts[CIndex];
-				const FVector U = A - B;
-				const FVector V = C - B;
-				// W is a vector on the polygon plane...
-				const FVector W = FVector::CrossProduct(V, PolygonNormal).GetUnsafeNormal();
-				// ... whose angle w/ V, Phi, is less than half pi iff ABC is an acute angle, which makes it suitable for
-				// making a triangle
-				const float CosPhi = FVector::DotProduct(U, W);
+				const FVector U = B - A;
+				const FVector V = (C - B).GetUnsafeNormal();
+				const FVector W = FVector::CrossProduct(U, PolygonNormal).GetUnsafeNormal();
+				const float CosPhi = FVector::DotProduct(W, V);
 				// if obtuse...
+				if (m == 6) {
+					printf("%.2f\n", CosPhi);
+				}
 				if (CosPhi <= 0) {
 					AIndex = AIndex == PolyVertCt - 1 ? 0 : AIndex + 1;
 					FailureCt++;

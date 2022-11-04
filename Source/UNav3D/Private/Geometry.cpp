@@ -183,6 +183,7 @@ namespace Geometry {
 			return true;
 		}
 
+		// Does NOT require assumption that P has been projected onto T's plane
 		// clever trick: assume the pt is inside the triangle. then, the pt makes three triangles - one with every pair
 		// of tri vertices. the sum of those areas is equal to the area of the triangle.
 		bool Internal_DoesPointTouchTri(const Tri& T, const FVector& P) {
@@ -926,5 +927,15 @@ namespace Geometry {
 				TMesh, GroupExcludingThisMesh, GroupUPolys[i], BBoxDiagDist, MinZ, MHitCtr
 			);
 		}
+	}
+	
+	// clever trick: assume the pt is inside the triangle. then, the pt makes three triangles - one with every pair
+	// of tri vertices. the sum of those areas is equal to the area of the triangle. Added epsilon to make room for
+	// fp error
+	bool DoesPointTouchTri(const FVector& A, const FVector& B, const FVector& C, const FVector& P) {
+		return (
+			Tri::GetArea(P, A, B) + Tri::GetArea(P, B, C) + Tri::GetArea(P, C, A)
+			<= Tri::GetArea(A, B, C) + NEAR_EPSILON
+		);
 	}
 }

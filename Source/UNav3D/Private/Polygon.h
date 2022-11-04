@@ -10,6 +10,7 @@ struct Polygon {
 	TArray<FVector> Vertices;
 	int TriIndex;
 	enum POLYGON_MODE {SUBTRACT, ADD} Mode;
+	FVector* Normal;
 };
 
 // used to denote intersections between triangles, for building polygons

@@ -165,3 +165,10 @@ void UNavDbg::DrawAllPolygons(const UWorld* World, const TArray<TArray<TArray<Po
 		}
 	}
 }
+
+void UNavDbg::DrawTriMeshNormals(const UWorld* World, const TriMesh& TMesh) {
+	for (int i = 0; i < TMesh.Grid.Num(); i++) {
+		auto& T = TMesh.Grid[i];
+		DrawDebugLine(World, T.GetCenter(), T.GetCenter() + T.Normal * 10.0f, FColor::Green, false, DBG_DRAW_TIME, 0, 1.5f);
+	}
+}

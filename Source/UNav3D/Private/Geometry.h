@@ -42,5 +42,7 @@ namespace Geometry {
 		TArray<TriMesh*>& Group,
 		TArray<TArray<UnstructuredPolygon>>& GroupUPolys
 	);
-	
+
+	// Does P (roughly) lie on/inside Triangle ABC?
+	bool DoesPointTouchTri(const FVector& A, const FVector& B, const FVector& C, const FVector& P);
 }

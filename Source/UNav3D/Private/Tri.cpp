@@ -30,7 +30,7 @@ Tri::Tri() :
 
 Tri::Tri(FVector& _A, FVector& _B, FVector& _C) :
 	A(_A), B(_B), C(_C),
-	Normal(FVector::CrossProduct(_B - _A, _C - _A).GetUnsafeNormal()),
+	Normal(FVector::CrossProduct(_A - _C, _A - _B).GetUnsafeNormal()),
 	Flags(0x0),
 	Area(GetArea(_A, _B, _C)),
 	LongestSidelenSq(GetLongestTriSidelenSq(_A, _B, _C))

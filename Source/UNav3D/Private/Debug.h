@@ -40,4 +40,6 @@ namespace UNavDbg {
 	void DrawPolygon(const UWorld* World, const Polygon& P);
 
 	void DrawAllPolygons(const UWorld* World, const TArray<TArray<TArray<Polygon>>>& Polygons);
+
+	void DrawTriMeshNormals(const UWorld* World, const TriMesh& TMesh);
 }
