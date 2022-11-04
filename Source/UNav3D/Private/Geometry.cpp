@@ -938,4 +938,58 @@ namespace Geometry {
 			<= Tri::GetArea(A, B, C) + NEAR_EPSILON
 		);
 	}
+
+	bool IsEar(const TArray<FVector>& Vertices, int i, int j, int k) {
+		const FVector& A = Vertices[i];
+		const FVector& B = Vertices[j];
+		const FVector& C = Vertices[k];
+		const int VertexCt = Vertices.Num();
+		if (i >= VertexCt - 2) {
+			for (int m = k + 1; m < i; m++) {
+				if (DoesPointTouchTri(A, B, C, Vertices[m])) {
+					return false;
+				}
+			}
+		}
+		else for (int m = 0; m < VertexCt; m++) {
+			if ((m < i || m > k) && DoesPointTouchTri(A, B, C, Vertices[m])) {
+				return false;
+			}
+		}	
+		return true;
+	}
+
+	bool IsEar(const TArray<FVector>& Vertices, const TArray<bool>& VertAvailable, int i, int j, int k) {
+		const FVector& A = Vertices[i];
+		const FVector& B = Vertices[j];
+		const FVector& C = Vertices[k];
+		const int VertexCt = Vertices.Num();
+		for (int m = 0; m < VertexCt; m++) {
+			if (VertAvailable[m] && DoesPointTouchTri(A, B, C, Vertices[m])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
+	VERTEX_T GetPolyVertexType(
+		const FVector& Normal, const FVector& W, const FVector& V, const FVector& U, VERTEX_T PrevType
+	) {
+		// Q is the normal to the plane that passes through pts i-1 and i, orthogonal to the polygon, which vertex
+		// i+1 needs to be on the correct side of to make an interior triangle with i and i-1
+		const FVector Q = FVector::CrossProduct(V, Normal);
+		const float CosTheta = FVector::DotProduct(Q, W);
+		const float CosPhi = FVector::DotProduct(Q, U);
+
+		if (PrevType == VERTEX_INTERIOR) {
+			if (CosTheta > 0.0f && CosPhi <= 0.0f) {
+				return VERTEX_EXTERIOR;
+			}
+			return VERTEX_INTERIOR;
+		}
+		if (CosTheta > 0.0f && CosPhi >= 0.0f) {
+			return VERTEX_EXTERIOR;	
+		}
+		return VERTEX_INTERIOR;
+	}
 }

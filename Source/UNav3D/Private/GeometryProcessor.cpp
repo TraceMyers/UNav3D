@@ -330,7 +330,7 @@ void GeometryProcessor::FormMeshesFromGroups(
 		NewTriVertexIndices.Reserve((int)(TriCt * 0.2f)); // just guessing how much space to reserve here
 		TArray<FVector> NewVertices;
 		NewVertices.Reserve((int)(VertexCt * 0.2f));
-		const TArray<TArray<Polygon>>& GroupPolygons = Polygons[i];
+		TArray<TArray<Polygon>>& GroupPolygons = Polygons[i];
 		for (int j = 0; j < GroupPolygons.Num(); j++) {
 			auto& TMesh = Group[j];
 			if (strcmp(TCHAR_TO_ANSI(*TMesh->MeshActor->GetName()), "DebugMarkerMesh2_2") == 0) {
@@ -600,131 +600,194 @@ void GeometryProcessor::PopulateUnmarkedTriData(
 	}
 }
 
+// https://www.geometrictools.com/Documentation/TriangulationByEarClipping.pdf
+// Ear clipping is a bit slow compared to other methods, but it's the easiest to implement
+// TODO: a closed, doubly linked list would make this read less like garbage
 void GeometryProcessor::CreateNewTriData(
-	const TArray<Polygon>& Polygons,
+	TArray<Polygon>& Polygons,
 	TArray<FVector>& Vertices,
 	TArray<FIntVector>& TriVertexIndices
 ) {
-	// for flagging vertices as unavailable after being used to create a tri
-	int UnavailableSz = 64; // likely more than necessary
-	bool* VertUnavailable = new bool[UnavailableSz];
-	if (VertUnavailable == nullptr) {
-		printf("GeometryProcessor::CreateNewTriData(), VertUnavailable alloc failure. returning\n");
-		return;
-	}
-	int m = 0;	
+	TArray<Geometry::VERTEX_T> VertTypes;
 	for (auto& Polygon : Polygons) {
-		if (m == 6) {
-			printf("hello\n");
-		}
-		m++;
-		const auto& PolyVerts = Polygon.Vertices;
+		const FVector& PolyNormal = *Polygon.Normal;	
+		TArray<FVector>& PolyVerts = Polygon.Vertices;
 		const int PolyVertCt = PolyVerts.Num();
-		if (PolyVertCt < 3) {
-			continue;
-		}
+		const int PolyVertCtM1 = PolyVertCt - 1;
+		VertTypes.Init(Geometry::VERTEX_INTERIOR, PolyVertCt);
+
+		const FVector& A = PolyVerts[0];
+		float LongestDistSq = FLT_MIN;
+		int LongestDistIndex = -1;
 		
-		// reallocating if there are more vertices in polygon than unavailable flags
-		if (PolyVertCt > UnavailableSz) {
-			delete VertUnavailable;
-			UnavailableSz = PolyVertCt;
-			VertUnavailable = new bool[UnavailableSz];
-			if (VertUnavailable == nullptr) {
-				printf("GeometryProcessor::CreateNewTriData(), VertUnavailable alloc failure. returning\n");
-				return;
+		TArray<bool> IsEar;
+		TArray<FVector> NextVertVec;
+		IsEar.Init(false, PolyVertCt);
+		NextVertVec.Reserve(PolyVertCt);
+		for (int i = 0; i < PolyVertCt - 2; i++) {
+			// testing whether or ijk makes an ear - a triangle with no polygon points inside of it
+			const int j = i + 1;
+			const int k = j + 1;
+			if (Geometry::IsEar(PolyVerts, i, j, k)) {
+				IsEar[j] = true;
 			}
+			// the farthest vertex from any point on the polygon must be the vertex of an interior angle
+			const float DistSq = FVector::DistSquared(A, PolyVerts[j]);
+			if (DistSq > LongestDistSq) {
+				LongestDistSq = DistSq;
+				LongestDistIndex = i;
+			}
+			// getting the vector from each vertex to the next
+			NextVertVec.Add(PolyVerts[j] - PolyVerts[i]);
 		}
-		const int AddVerticesOffset = Vertices.Num();
-		FVector& PolygonNormal = *Polygon.Normal;
-		
-		memset(VertUnavailable, false, PolyVertCt * sizeof(bool));
+		// finishing up from loop; linked list would make this unnecessary
+		const int m = PolyVertCt - 2;
+		const int n = PolyVertCtM1;
+		if (Geometry::IsEar(PolyVerts, m, n, 0)) {
+			IsEar[n] = true;
+		}
+		if (Geometry::IsEar(PolyVerts, n, 0, 1)) {
+			IsEar[0] = true;
+		}
+		const float DistSq = FVector::DistSquared(A, PolyVerts[n]);
+		if (DistSq > LongestDistSq) {
+			LongestDistIndex = n;
+		}
+		NextVertVec.Add(PolyVerts[n] - PolyVerts[m]);
+		NextVertVec.Add(PolyVerts[0] - PolyVerts[n]);
+
+		// starting on a known interior angled vertex allows us to walk along the polygon and determine the types
+		// of the rest.
+		int u = LongestDistIndex + 1;
+		if (u == PolyVertCt) {
+			u = 0;
+		}
+		do {
+			int Ind1 = u - 1;
+			int Ind0 = u - 2;
+			if (Ind1 < 0) {
+				Ind1 = PolyVertCtM1;
+				Ind0 = PolyVertCt - 2;
+			}
+			else if (Ind0 < 0) {
+				Ind0 = PolyVertCtM1;
+			}
+			// vert i being checked for interior/exterior - whether the acute angle made by the 3 vertices falls
+			// inside the polygon or outside it
+			VertTypes[u] = Geometry::GetPolyVertexType(
+				PolyNormal, -NextVertVec[Ind0], NextVertVec[Ind1], NextVertVec[u], VertTypes[Ind1]
+			);	
+
+			if (++u == PolyVertCt) {
+				u = 0;
+			}
+		} while (u != LongestDistIndex);
+
+		int AvailableCt = PolyVertCt;
 		bool FillSuccess = false;
-		for (int StartIndex = 0; StartIndex < PolyVertCt; StartIndex++) {
-			TArray<FIntVector> TempTriVertexIndices;
-			int FailureCt = 0;
-			int AvailableCt = PolyVertCt;
-
-			// attempting to fill the polygon with triangles, starting at a different index until it works
-			int AIndex = StartIndex;
-			while (AvailableCt >= 3) {
-
-				// selecting vertices by availability. available-adjacent vertices are the only good candidates for
-				// forming a triangle
-				while (VertUnavailable[AIndex]) {
-					AIndex++;
-					if (AIndex >= PolyVertCt) {
-						AIndex = 0;
-					}
+		const int AddVerticesOffset = Vertices.Num();
+		TArray<bool> VertAvailable;
+		VertAvailable.Init(true, PolyVertCt);
+		TArray<FIntVector> TempTriVertexIndices;
+		
+		for (int i = 0, FailCt = 0; FailCt < AvailableCt; ) {
+			if (VertAvailable[i] && IsEar[i] && VertTypes[i] == Geometry::VERTEX_INTERIOR) {
+				FailCt = 0;
+				int AIndex = i - 1;
+				const int BIndex = i;
+				int CIndex = i + 1;
+				if (AIndex < 0) {
+					AIndex = PolyVertCtM1;
 				}
-				int BIndex = AIndex + 1;
-				if (BIndex >= PolyVertCt) {
-					BIndex = 0;
-				}
-				while (VertUnavailable[BIndex]) {
-					BIndex++;
-					if (BIndex >= PolyVertCt) {
-						BIndex = 0;
-					}
-				}
-				int CIndex = BIndex + 1;
-				if (CIndex >= PolyVertCt) {
+				else if (CIndex == PolyVertCt) {
 					CIndex = 0;
 				}
-				while (VertUnavailable[CIndex]) {
-					CIndex++;
-					if (CIndex >= PolyVertCt) {
-						CIndex = 0;
-					}
-				}
-
-				// TODO: debug failure cases. simple for simple case check cube & cane group
-				
-				// I believe this is the ear-clipping method of triangle-izing a polygon:
-				// If three adjacent vertices make a triangle, the middle vertex becomes unavailable, and an imaginary
-				// edge is formed between the first and third. the first and third become 'available-adjacent'.
-				// A, B, and C are three available-adjacent vertices.
-				const FVector& A = PolyVerts[AIndex];
-				const FVector& B = PolyVerts[BIndex];
-				const FVector& C = PolyVerts[CIndex];
-				const FVector U = B - A;
-				const FVector V = (C - B).GetUnsafeNormal();
-				const FVector W = FVector::CrossProduct(U, PolygonNormal).GetUnsafeNormal();
-				const float CosPhi = FVector::DotProduct(W, V);
-				// if obtuse...
-				if (m == 6) {
-					printf("%.2f\n", CosPhi);
-				}
-				if (CosPhi <= 0) {
-					AIndex = AIndex == PolyVertCt - 1 ? 0 : AIndex + 1;
-					FailureCt++;
-					if (FailureCt >= AvailableCt) {
-						break;
-					}
-					continue;
-				}
-
-				// Triangle formation success!
-				FailureCt = 0;
-				// vertices will be added to Vertices in the same order as they exist in the polygon,
-				// so the indices to the future vertices are the indices to the polygon verts plus current Vertices.Num()
 				TempTriVertexIndices.Add(FIntVector(
 					AIndex + AddVerticesOffset, BIndex + AddVerticesOffset, CIndex + AddVerticesOffset
 				));
-				
-				if (AvailableCt == 3) {
+				if (--AvailableCt == 2) {
+					// TODO: can just check at head of loop if 3 vertices
 					FillSuccess = true;
 					break;
 				}
-				VertUnavailable[BIndex] = true;
-				AvailableCt--;
+				
+				VertAvailable[BIndex] = false;
+				
+				int PreA1Index = AIndex - 1;
+				if (PreA1Index < 0) {
+					PreA1Index = PolyVertCtM1;
+				}
+				while (!VertAvailable[PreA1Index]) {
+					if (--PreA1Index < 0) {
+						PreA1Index = PolyVertCtM1;
+					}
+				}
+				int PreA2Index = PreA1Index - 1;
+				if (PreA2Index < 0) {
+					PreA2Index = PolyVertCtM1;
+				}
+				while (!VertAvailable[PreA2Index]) {
+					if (--PreA2Index < 0) {
+						PreA2Index = PolyVertCtM1;
+					}
+				}
+				if (AvailableCt == 3) {
+					// for now, just skip checking validity
+					TempTriVertexIndices.Add(FIntVector(
+						PreA2Index + AddVerticesOffset, PreA1Index + AddVerticesOffset, AIndex + AddVerticesOffset
+					));
+					FillSuccess = true;
+					break;
+				}
+				int PostCIndex = CIndex + 1;
+				if (PostCIndex == PolyVertCt) {
+					PostCIndex = 0;
+				}
+				while (!VertAvailable[PostCIndex]) {
+					if (++PostCIndex == PolyVertCt) {
+						PostCIndex = 0;
+					}
+				}
+			
+				VertAvailable[AIndex] = false;
+				VertAvailable[PreA2Index] = false;
+				VertAvailable[PreA1Index] = false;
+				IsEar[AIndex] = Geometry::IsEar(PolyVerts, VertAvailable, PreA1Index, AIndex, CIndex);
+				VertAvailable[PreA2Index] = true;
+				VertAvailable[PreA1Index] = true;
+				
+				VertAvailable[CIndex] = false;
+				VertAvailable[PostCIndex] = false;
+				IsEar[CIndex] = Geometry::IsEar(PolyVerts, VertAvailable, AIndex, CIndex, PostCIndex);
+				VertAvailable[AIndex] = true;
+				VertAvailable[CIndex] = true;
+				VertAvailable[PostCIndex] = true;
+				
+				VertTypes[AIndex] = Geometry::GetPolyVertexType(
+					PolyNormal,
+					-NextVertVec[PreA2Index],
+					NextVertVec[PreA1Index],
+					NextVertVec[AIndex],
+					VertTypes[PreA1Index]
+				);
+				VertTypes[CIndex] = Geometry::GetPolyVertexType(
+					PolyNormal,
+					-NextVertVec[PreA1Index],
+					NextVertVec[AIndex],
+					NextVertVec[CIndex],
+					VertTypes[AIndex]
+				);
 			}
-			if (FillSuccess) {
-				Vertices.Append(PolyVerts);
-				TriVertexIndices.Append(TempTriVertexIndices);
-				break;
+			else {
+				FailCt++;
 			}
-			TempTriVertexIndices.Empty(TempTriVertexIndices.Num());	
+			if (++i == PolyVertCt) {
+				i = 0;
+			}
+		}
+		if (FillSuccess) {
+			Vertices.Append(PolyVerts);
+			TriVertexIndices.Append(TempTriVertexIndices);
 		}
 	}
-	delete VertUnavailable;
 }

@@ -11,6 +11,8 @@ struct UnstructuredPolygon;
 
 namespace Geometry {
 
+	enum VERTEX_T {VERTEX_INTERIOR, VERTEX_EXTERIOR};
+	
 	// Populates a BoundingBox from a AStaticMeshActor
 	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor);
 
@@ -45,4 +47,12 @@ namespace Geometry {
 
 	// Does P (roughly) lie on/inside Triangle ABC?
 	bool DoesPointTouchTri(const FVector& A, const FVector& B, const FVector& C, const FVector& P);
+
+	bool IsEar(const TArray<FVector>& Vertices, int i, int j, int k);
+
+	bool IsEar(const TArray<FVector>& Vertices, const TArray<bool>& VertAvailable, int i, int j, int k);
+
+	VERTEX_T GetPolyVertexType(
+		const FVector& Normal, const FVector& W, const FVector& V, const FVector& U, VERTEX_T PrevType
+	);
 }

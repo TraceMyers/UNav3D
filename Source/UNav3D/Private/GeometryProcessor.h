@@ -95,7 +95,7 @@ private:
 	);
 
 	static void CreateNewTriData(
-		const TArray<Polygon>& Polygons,
+		TArray<Polygon>& Polygons,
 		TArray<FVector>& Vertices,
 		TArray<FIntVector>& TriVertexIndices
 	);
