@@ -1,9 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Modules/ModuleManager.h"
 #include "GeometryProcessor.h"
-#include "Draw.h"
 
 // TODO: UNav3D should have no private includes
 
@@ -20,9 +18,7 @@
 class FToolBarBuilder;
 class FMenuBuilder;
 class FUICommandList;
-class AUNav3DBoundsVolume;
 struct TriMesh;
-class ADraw;
 
 class FUNav3DModule : public IModuleInterface {
 	
@@ -40,7 +36,7 @@ private:
 	void RegisterMenus();
 
 	// Finds bounds volume in editor viewport; returns false if number of bounds volumes is not 1
-	bool SetBoundsVolume();
+	bool SetBoundsVolume(const UWorld* World) const;
 
 	// Takes meshes found inside bounds volume and populates TriMeshes with their data
 	bool PopulateTriMeshes(TArray<TriMesh>& TriMeshes) const;
@@ -48,9 +44,7 @@ private:
 	void EnterProgressFrame(FScopedSlowTask& Task, const char* msg) const;
 	
 	TSharedPtr<FUICommandList> PluginCommands;
-	AUNav3DBoundsVolume* BoundsVolume;
 	GeometryProcessor GeomProcessor;
-	ADraw* Draw;
 	
 	bool Initialized = false;
 	const int TotalTasks = 2;

@@ -495,8 +495,7 @@ void GeometryProcessor::BuildPolygonsFromTri(
 	}
 	// if the tri makes it here, its PolygonNodes array is fairly likely composed of one or more closed
 	// loops that can be used to form polygon(s)
-	int m = 0;
-	for (int StartIndex = 0; StartIndex < NodeCt; m++) {
+	for (int StartIndex = 0; StartIndex < NodeCt; ) {
 		PolyNode& StartNode = PolygonNodes[StartIndex];
 		TArray<int>* EdgeIndices = &StartNode.Edges;
 		
@@ -540,9 +539,6 @@ void GeometryProcessor::BuildPolygonsFromTri(
 			// move on to next node
 			EdgeIndices = &EdgeNode.Edges;
 			PrevIndex = EdgeIndex;
-			if (++k == 1000 || m == 1000) {
-				printf("why hello there\n");
-			}
 		}
 	}
 	T.MarkForPolygon();	
@@ -622,7 +618,7 @@ void GeometryProcessor::PopulateUnmarkedTriData(
 
 // https://www.geometrictools.com/Documentation/TriangulationByEarClipping.pdf
 // Ear clipping is a bit slow compared to other methods, but it's the easiest to implement
-// TODO: a closed, doubly linked list would make this read less like garbage
+// TODO: a closed, doubly linked list would make this MUCH simpler
 void GeometryProcessor::CreateNewTriData(
 	TArray<Polygon>& Polygons,
 	TArray<FVector>& Vertices,
@@ -634,9 +630,6 @@ void GeometryProcessor::CreateNewTriData(
 		const FVector& PolyNormal = *Polygon.Normal;	
 		TArray<FVector>& PolyVerts = Polygon.Vertices;
 		const int PolyVertCt = PolyVerts.Num();
-		if (PolyVertCt < 3) {
-			printf("?\n");
-		}
 		const int PolyVertCtM1 = PolyVertCt - 1;
 		VertTypes.Init(Geometry::VERTEX_INTERIOR, PolyVertCt);
 

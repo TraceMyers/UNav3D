@@ -78,10 +78,10 @@ void FUNav3DModule::PluginButtonClicked(){
 		UNAV_GENERR("GEditor or World Unavailable")
 		return;
 	}
-	UWorld* World = GEditor->GetEditorWorldContext().World();
+	const UWorld* World = GEditor->GetEditorWorldContext().World();
 
 	// If we find a single UNav3DBoundsVolume in the editor world, we're good
-	if (!SetBoundsVolume()) {
+	if (!SetBoundsVolume(World)) {
 		return;
 	}
 
@@ -128,10 +128,10 @@ void FUNav3DModule::RegisterMenus() {
 	}
 }
 
-bool FUNav3DModule::SetBoundsVolume() {
+bool FUNav3DModule::SetBoundsVolume(const UWorld* World) const {
 	TArray<AActor*> FoundActors;
 	UGameplayStatics::GetAllActorsOfClass(
-		GEditor->GetEditorWorldContext().World(),
+		World,
 		AUNav3DBoundsVolume::StaticClass(),
 		FoundActors
 	);
@@ -144,13 +144,13 @@ bool FUNav3DModule::SetBoundsVolume() {
 		UNAV_GENERR("UNav3D Currently only supports one Navigation Volume.")
 		return false;
 	}
-	BoundsVolume = Cast<AUNav3DBoundsVolume>(FoundActors[0]);
+	Data::BoundsVolume = Cast<AUNav3DBoundsVolume>(FoundActors[0]);
 	return true;
 }
 
 bool FUNav3DModule::PopulateTriMeshes(TArray<TriMesh>& TMeshes) const {
 	// find overlapping static mesh actors
-	BoundsVolume->GetOverlappingMeshes(TMeshes);
+	Data::BoundsVolume->GetOverlappingMeshes(TMeshes);
 	if (TMeshes.Num() == 0) {
 		UNAV_GENERR("No static mesh actors found inside the bounds volume.")
 		return false;
