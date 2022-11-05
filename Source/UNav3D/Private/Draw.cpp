@@ -37,13 +37,10 @@ void ADraw::Init() {
 }
 
 void ADraw::HideAndShowAllNavMeshes() {
-	SetIsTemporarilyHiddenInEditor(true);
-	printf("num sections: %d\n", NavMeshes->GetNumSections());
 	if (NavMeshes->GetNumSections() == 0) {
 		for (auto& NMesh : Data::NMeshes) {
 			AddNavMesh(NMesh);	
 		}
-		printf("showed meshes from 0\n");
 	}
 	else {
 		NavMeshes->ClearAllMeshSections();
