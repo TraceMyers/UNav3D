@@ -2,6 +2,9 @@
 #include "Data.h"
 #include "Engine/StaticMeshActor.h"
 #include "Draw.h"
+#include "Debug.h"
+
+// TODO: find ADraw at open and delete
 
 UNavUI::UNavUI() {
 	
@@ -36,5 +39,25 @@ void UNavUI::HideAndShowAllNavMeshes() {
 	if (Draw != nullptr) {
 		Draw->HideAndShowAllNavMeshes();
 	}
+}
+
+// TODO: move this to Draw w/ procedural mesh
+void UNavUI::DrawFailureCases() {
+	if (GEditor == nullptr || GEditor->GetEditorWorldContext().World() == nullptr) {
+		printf("UNavUI::DrawFailureCases() world unavailable\n");
+		return;
+	}
+	const UWorld* World = GEditor->GetEditorWorldContext().World();
+	UNavDbg::DrawTris(World, Data::FailureCaseTris);
+	UNavDbg::DrawPolygons(World, Data::FailureCasePolygons);
+}
+
+void UNavUI::DrawCulledTris() {
+	if (GEditor == nullptr || GEditor->GetEditorWorldContext().World() == nullptr) {
+		printf("UNavUI::DrawFailureCases() world unavailable\n");
+		return;
+	}
+	const UWorld* World = GEditor->GetEditorWorldContext().World();
+	UNavDbg::DrawTris(World, Data::CulledTris, FColor::Blue);
 }
 

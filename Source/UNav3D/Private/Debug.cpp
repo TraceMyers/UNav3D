@@ -2,6 +2,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "DebugMarker.h"
 #include "CoreMinimal.h"
+#include "Data.h"
 #include "DrawDebugHelpers.h"
 #include "TriMesh.h"
 #include "Tri.h"
@@ -178,4 +179,19 @@ void UNavDbg::DrawNavMeshNormals(const UWorld* World, const UNavMesh& NMesh) {
 		auto& T = NMesh.Grid[i];
 		DrawDebugLine(World, T.GetCenter(), T.GetCenter() + T.Normal * 10.0f, FColor::Red, false, DBG_DRAW_TIME, 0, 1.5f);
 	}
+}
+
+void UNavDbg::DrawTris(const UWorld* World, const TArray<Tri>& Tris, FColor Color) {
+	for (int i = 0; i < Tris.Num(); i++) {
+		const auto& Tri = Tris[i];
+		DrawDebugLine(World, Tri.A, Tri.B, Color, false, DBG_DRAW_TIME, 0, 1.0f);
+		DrawDebugLine(World, Tri.B, Tri.C, Color, false, DBG_DRAW_TIME, 0, 1.0f); 
+		DrawDebugLine(World, Tri.C, Tri.A, Color, false, DBG_DRAW_TIME, 0, 1.0f);
+	}	
+}
+
+void UNavDbg::DrawPolygons(const UWorld* World, const TArray<Polygon>& Polygons, FColor Color) {
+	for (auto& Polygon : Polygons) {
+		DrawPolygon(World, Polygon);
+	}	
 }

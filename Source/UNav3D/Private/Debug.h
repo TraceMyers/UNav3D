@@ -9,7 +9,7 @@ struct UNavMesh;
 class TriGrid;
 
 #define UNAV_DBG
-#define DBG_DRAW_TIME 128.0f
+#define DBG_DRAW_TIME 30.0f
 
 namespace UNavDbg {
 	
@@ -44,4 +44,8 @@ namespace UNavDbg {
 	void DrawTriMeshNormals(const UWorld* World, const TriMesh& TMesh);
 
 	void DrawNavMeshNormals(const UWorld* World, const UNavMesh& NMesh);
+
+	void DrawTris(const UWorld* World, const TArray<Tri>& Tris, FColor Color=FColor::Red);
+
+	void DrawPolygons(const UWorld* World, const TArray<Polygon>& Polygons, FColor Color=FColor::Magenta);
 }

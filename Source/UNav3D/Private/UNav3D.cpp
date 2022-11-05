@@ -11,6 +11,7 @@
 #include "TriMesh.h"
 #include "Data.h"
 #include "UNavMesh.h"
+#include <thread>
 
 // using the default windows package define; would be better to determine this
 #define _WIN32_WINNT_WIN10_TH2 0
@@ -21,6 +22,8 @@
 #define _WIN32_WINNT_WIN10_RS5 0
 #include <windows.h>
 #include <stdio.h>
+
+#include "Misc/FeedbackContext.h"
 
 
 #define LOCTEXT_NAMESPACE "UNav3D"
@@ -83,17 +86,20 @@ void FUNav3DModule::PluginButtonClicked(){
 	}
 
 	// starting up progress bar
-	constexpr int TotalCalls = 2;
-	FScopedSlowTask ProgressTask(TotalCalls, FText::FromString("Generating UNav3D Data"));
-	ProgressTask.MakeDialog(true);
-
-	// populate TriMeshes with vertices, tris
-	if (!PopulateTriMeshes(World, Data::TMeshes, ProgressTask)) {
+	FScopedSlowTask Task(
+		TotalTasks, LOCTEXT("Unav3D", "UNav3D working on...")
+	);
+	Task.MakeDialog(false);
+	
+	EnterProgressFrame(Task, "getting static mesh data");
+	if (!PopulateTriMeshes(Data::TMeshes)) {
 		return;
 	}
-
-	GeomProcessor.PopulateNavMeshes(World, Data::TMeshes, Data::NMeshes);
 	
+	EnterProgressFrame(Task, "creating nav meshes");
+	GeomProcessor.PopulateNavMeshes(World, Data::TMeshes, Data::NMeshes);
+
+	printf("end\n");
 }
 
 void FUNav3DModule::RegisterMenus() {
@@ -142,18 +148,13 @@ bool FUNav3DModule::SetBoundsVolume() {
 	return true;
 }
 
-bool FUNav3DModule::PopulateTriMeshes(
-	UWorld* World,
-	TArray<TriMesh>& TMeshes,
-	FScopedSlowTask& ProgressTask
-) const {
+bool FUNav3DModule::PopulateTriMeshes(TArray<TriMesh>& TMeshes) const {
 	// find overlapping static mesh actors
 	BoundsVolume->GetOverlappingMeshes(TMeshes);
 	if (TMeshes.Num() == 0) {
 		UNAV_GENERR("No static mesh actors found inside the bounds volume.")
 		return false;
 	}
-	ProgressTask.EnterProgressFrame();
 
 	// getting geometry data and populating the TriMeshes with it
 	for (int i = 0; i < TMeshes.Num(); i++) {
@@ -174,9 +175,15 @@ bool FUNav3DModule::PopulateTriMeshes(
 #endif
 		
 	}
-	ProgressTask.EnterProgressFrame();
 	
 	return true;
+}
+
+void FUNav3DModule::EnterProgressFrame(FScopedSlowTask& Task, const char* msg) const {
+	Task.EnterProgressFrame(
+		1.0f,
+		FText::Format(LOCTEXT("UNav3D", "UNav3D working on... {0}"), FText::FromString(msg))
+	);
 }
 
 #undef LOCTEXT_NAMESPACE

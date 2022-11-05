@@ -43,7 +43,9 @@ private:
 	bool SetBoundsVolume();
 
 	// Takes meshes found inside bounds volume and populates TriMeshes with their data
-	bool PopulateTriMeshes(UWorld* World, TArray<TriMesh>& TriMeshes, FScopedSlowTask& ProgressTask) const;
+	bool PopulateTriMeshes(TArray<TriMesh>& TriMeshes) const;
+
+	void EnterProgressFrame(FScopedSlowTask& Task, const char* msg) const;
 	
 	TSharedPtr<FUICommandList> PluginCommands;
 	AUNav3DBoundsVolume* BoundsVolume;
@@ -51,7 +53,9 @@ private:
 	ADraw* Draw;
 	
 	bool Initialized = false;
+	const int TotalTasks = 2;
 	
 };
+
 
 #undef LOCTEXT_NAMESPACE

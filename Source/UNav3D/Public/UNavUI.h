@@ -24,6 +24,12 @@ public:
 	UFUNCTION(BlueprintCallable)
 	void HideAndShowAllNavMeshes();
 
+	UFUNCTION(BlueprintCallable)
+	void DrawFailureCases();
+
+	UFUNCTION(BlueprintCallable)
+	void DrawCulledTris();
+
 	UPROPERTY()
 	ADraw* Draw;
 

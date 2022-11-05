@@ -1,4 +1,6 @@
 ﻿#include "GeometryProcessor.h"
+
+#include "Data.h"
 #include "Geometry.h"
 #include "Rendering/PositionVertexBuffer.h"
 #include "RenderingThread.h"
@@ -76,7 +78,6 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateNavMeshes(
 
 	FormMeshesFromGroups(IntersectGroups, Polygons, OutMeshes);
 	
-	// InMeshes.Empty();
 	return GEOPROC_SUCCESS;
 }
 
@@ -278,11 +279,13 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 					if (T.AllObscured()) {
 						// ...and all vertices are obscured, tri is enclosed -> cull
 						T.MarkForCull();
+						Data::CulledTris.Add(T);
 					}
 					else if (T.AnyObscured()) {
 						// ... and 0 < n < 3 of the vertices are obscured, something has gone wrong
 						T.MarkProblemCase();
 						T.MarkForCull();
+						Data::FailureCaseTris.Add(T);
 					}	
 					continue;
 				}
@@ -435,6 +438,9 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 			}
 		}
 	}
+	if (UPoly.Edges.Num() > 0 && PolygonNodes.Num() == 0) {
+		Data::FailureCaseTris.Add(T);
+	}
 }
 
 void GeometryProcessor::AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, const FVector& B) {
@@ -476,19 +482,21 @@ void GeometryProcessor::BuildPolygonsFromTri(
 	// if no nodes were made or the links aren't made properly, this tri could be a problem child, or it could
 	// simply have intersections but still be fully enclosed in another mesh
 	const int NodeCt = PolygonNodes.Num();
-	if (NodeCt == 0) {
+	if (NodeCt < 3) {
 		T.MarkForCull();
 		return;
 	}
 	for (int m = 0; m < NodeCt; m++) {
 		if (PolygonNodes[m].Edges.Num() % 2 == 1) {
+			Data::FailureCaseTris.Add(T);
 			T.MarkForCull();
 			return;
 		}
 	}
 	// if the tri makes it here, its PolygonNodes array is fairly likely composed of one or more closed
 	// loops that can be used to form polygon(s)
-	for (int StartIndex = 0; StartIndex < NodeCt; ) {
+	int m = 0;
+	for (int StartIndex = 0; StartIndex < NodeCt; m++) {
 		PolyNode& StartNode = PolygonNodes[StartIndex];
 		TArray<int>* EdgeIndices = &StartNode.Edges;
 		
@@ -501,6 +509,7 @@ void GeometryProcessor::BuildPolygonsFromTri(
 		Polygon BuildingPolygon(TriIndex);
 		BuildingPolygon.Vertices.Add(StartNode.Location);
 		int PrevIndex = StartIndex;
+		int k = 0;
 		while (true) {
 			const int EdgeIndex = (*EdgeIndices)[0];
 			if (EdgeIndex == StartIndex) {
@@ -511,7 +520,9 @@ void GeometryProcessor::BuildPolygonsFromTri(
 					StartNode.Edges.RemoveAt(SNIndexOfEdge, 1, false);
 				}
 				BuildingPolygon.Normal = &T.Normal;
-				TMeshPolygons.Add(BuildingPolygon);
+				if (BuildingPolygon.Vertices.Num() >= 3) {
+					TMeshPolygons.Add(BuildingPolygon);
+				}
 				break;
 			}
 			// connect to another node
@@ -529,6 +540,9 @@ void GeometryProcessor::BuildPolygonsFromTri(
 			// move on to next node
 			EdgeIndices = &EdgeNode.Edges;
 			PrevIndex = EdgeIndex;
+			if (++k == 1000 || m == 1000) {
+				printf("why hello there\n");
+			}
 		}
 	}
 	T.MarkForPolygon();	
@@ -620,6 +634,9 @@ void GeometryProcessor::CreateNewTriData(
 		const FVector& PolyNormal = *Polygon.Normal;	
 		TArray<FVector>& PolyVerts = Polygon.Vertices;
 		const int PolyVertCt = PolyVerts.Num();
+		if (PolyVertCt < 3) {
+			printf("?\n");
+		}
 		const int PolyVertCtM1 = PolyVertCt - 1;
 		VertTypes.Init(Geometry::VERTEX_INTERIOR, PolyVertCt);
 
@@ -706,8 +723,18 @@ void GeometryProcessor::CreateNewTriData(
 				if (AIndex < 0) {
 					AIndex = PolyVertCtM1;
 				}
-				else if (CIndex == PolyVertCt) {
+				while (!VertAvailable[AIndex]) {
+					if (--AIndex < 0) {
+						AIndex = PolyVertCtM1;
+					}
+				}
+				if (CIndex == PolyVertCt) {
 					CIndex = 0;
+				}
+				while (!VertAvailable[CIndex]) {
+					if (++CIndex == PolyVertCt) {
+						CIndex = 0;
+					}
 				}
 				TempTriVertexIndices.Add(FIntVector(
 					AIndex + AddVerticesOffset, BIndex + AddVerticesOffset, CIndex + AddVerticesOffset
@@ -739,7 +766,6 @@ void GeometryProcessor::CreateNewTriData(
 					}
 				}
 				if (AvailableCt == 3) {
-					// for now, just skip checking validity
 					TempTriVertexIndices.Add(FIntVector(
 						PreA2Index + AddVerticesOffset, PreA1Index + AddVerticesOffset, AIndex + AddVerticesOffset
 					));
@@ -756,14 +782,12 @@ void GeometryProcessor::CreateNewTriData(
 					}
 				}
 			
-				VertAvailable[AIndex] = false;
-				VertAvailable[PreA2Index] = false;
 				VertAvailable[PreA1Index] = false;
+				VertAvailable[AIndex] = false;
+				VertAvailable[CIndex] = false;
 				IsEar[AIndex] = Geometry::IsEar(PolyVerts, VertAvailable, PreA1Index, AIndex, CIndex);
-				VertAvailable[PreA2Index] = true;
 				VertAvailable[PreA1Index] = true;
 				
-				VertAvailable[CIndex] = false;
 				VertAvailable[PostCIndex] = false;
 				IsEar[CIndex] = Geometry::IsEar(PolyVerts, VertAvailable, AIndex, CIndex, PostCIndex);
 				VertAvailable[AIndex] = true;
@@ -798,6 +822,9 @@ void GeometryProcessor::CreateNewTriData(
 			TArray<FVector*> TriNormals;
 			TriNormals.Init(Polygon.Normal, TempTriVertexIndices.Num());
 			Normals.Append(TriNormals);
+		}
+		else {
+			Data::FailureCasePolygons.Add(Polygon);
 		}
 	}
 }
