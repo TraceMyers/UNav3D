@@ -172,3 +172,10 @@ void UNavDbg::DrawTriMeshNormals(const UWorld* World, const TriMesh& TMesh) {
 		DrawDebugLine(World, T.GetCenter(), T.GetCenter() + T.Normal * 10.0f, FColor::Green, false, DBG_DRAW_TIME, 0, 1.5f);
 	}
 }
+
+void UNavDbg::DrawNavMeshNormals(const UWorld* World, const UNavMesh& NMesh) {
+	for (int i = 0; i < NMesh.Grid.Num(); i++) {
+		auto& T = NMesh.Grid[i];
+		DrawDebugLine(World, T.GetCenter(), T.GetCenter() + T.Normal * 10.0f, FColor::Red, false, DBG_DRAW_TIME, 0, 1.5f);
+	}
+}

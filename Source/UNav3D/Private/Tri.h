@@ -3,8 +3,8 @@
 // Used before populating a TriGrid
 struct TempTri {
 	
-	TempTri(FVector* _A, FVector* _B, FVector* _C) :
-		A(_A), B(_B), C(_C)
+	TempTri(FVector* _A, FVector* _B, FVector* _C, FVector* _Normal=nullptr) :
+		A(_A), B(_B), C(_C), Normal(_Normal)
 	{}
 
 	FVector GetCenter() const;
@@ -12,6 +12,7 @@ struct TempTri {
 	FVector* A;	
 	FVector* B;
 	FVector* C;
+	FVector* Normal;
 };
 
 // Triangle; saves space by storing references to vertices on the TriMesh.
@@ -68,6 +69,8 @@ struct Tri {
 	void MarkProblemCase();
 
 	void MarkForPolygon();
+
+	void CalculateNormal(FVector& Normal) const;
 
 	FVector& A;
 	FVector& B;

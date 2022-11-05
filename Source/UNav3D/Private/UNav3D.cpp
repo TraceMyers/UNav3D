@@ -9,6 +9,7 @@
 #include "Debug.h"
 #include "GeometryProcessor.h"
 #include "TriMesh.h"
+#include "Data.h"
 #include "UNavMesh.h"
 
 // using the default windows package define; would be better to determine this
@@ -46,6 +47,7 @@ void FUNav3DModule::StartupModule() {
 	freopen_s(&pFile, "CONOUT$", "w", stdout);
 	printf("Hello sailor!\n");
 #endif
+
 }
 
 void FUNav3DModule::ShutdownModule() {
@@ -56,6 +58,18 @@ void FUNav3DModule::ShutdownModule() {
 }
 
 void FUNav3DModule::PluginButtonClicked(){
+	// For now, built-in button is full reset; in future, there will be a button for full reset and a button
+	// for adding/changing existing data. Will also be moving over to using only editor utility widget instead
+	// of built-in button.
+	// Also, in release, TMeshes will probably get emptied after NMeshes are populated.
+	for (int i = 0; i < Data::TMeshes.Num(); i++) {
+		Data::TMeshes[i].ResetVertexData();
+	}
+	for (int i = 0; i < Data::NMeshes.Num(); i++) {
+		Data::NMeshes[i].ResetVertexData();
+	}
+	Data::TMeshes.Empty();
+	Data::NMeshes.Empty();
 	
 	if (GEditor == nullptr || GEditor->GetEditorWorldContext().World() == nullptr) {
 		UNAV_GENERR("GEditor or World Unavailable")
@@ -74,34 +88,12 @@ void FUNav3DModule::PluginButtonClicked(){
 	ProgressTask.MakeDialog(true);
 
 	// populate TriMeshes with vertices, tris
-	TArray<TriMesh> TMeshes;
-	if (!PopulateTriMeshes(World, TMeshes, ProgressTask)) {
+	if (!PopulateTriMeshes(World, Data::TMeshes, ProgressTask)) {
 		return;
 	}
 
-	TArray<UNavMesh> NavMeshes;
-	GeomProcessor.PopulateNavMeshes(World, TMeshes, NavMeshes);
-	for (auto& NMesh : NavMeshes) {
-		// UNavDbg::DrawBoundingBox(World, NMesh.Box);
-		UNavDbg::DrawNavMeshTris(World, NMesh);
-	}
-
-#ifdef UNAV_DBG
-	for (int i = 0; i < TMeshes.Num(); i++) {
-		TriMesh& TMesh = TMeshes[i];
-		// UNavDbg::DrawTriMeshTris(World, TMesh);
-		// UNavDbg::DrawTriMeshVertices(World, TMesh);
-		// UNavDbg::DrawTriMeshNormals(World, TMesh);
-	}
-#endif
-
-	// temp to ensure we're not leaking during production
-	for (int i = 0; i < TMeshes.Num(); i++) {
-		TMeshes[i].ResetVertexData();
-	}
-	for (int i = 0; i < NavMeshes.Num(); i++) {
-		NavMeshes[i].ResetVertexData();
-	}
+	GeomProcessor.PopulateNavMeshes(World, Data::TMeshes, Data::NMeshes);
+	
 }
 
 void FUNav3DModule::RegisterMenus() {

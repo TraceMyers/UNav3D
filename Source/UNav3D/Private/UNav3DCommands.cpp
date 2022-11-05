@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "UNav3DCommands.h"
 
 #define LOCTEXT_NAMESPACE "FUNav3DModule"

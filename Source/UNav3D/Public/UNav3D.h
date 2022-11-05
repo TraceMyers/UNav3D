@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Modules/ModuleManager.h"
 #include "GeometryProcessor.h"
+#include "Draw.h"
 
 // TODO: UNav3D should have no private includes
 
@@ -21,6 +22,7 @@ class FMenuBuilder;
 class FUICommandList;
 class AUNav3DBoundsVolume;
 struct TriMesh;
+class ADraw;
 
 class FUNav3DModule : public IModuleInterface {
 	
@@ -46,6 +48,9 @@ private:
 	TSharedPtr<FUICommandList> PluginCommands;
 	AUNav3DBoundsVolume* BoundsVolume;
 	GeometryProcessor GeomProcessor;
+	ADraw* Draw;
+	
+	bool Initialized = false;
 	
 };
 

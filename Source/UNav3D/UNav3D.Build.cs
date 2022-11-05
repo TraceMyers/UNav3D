@@ -26,6 +26,9 @@ public class UNav3D : ModuleRules
 			new string[]
 			{
 				"Core",
+				"UnrealEd",
+				"Blutility",
+				"UMG"
 			}
 			);
 			
@@ -43,7 +46,11 @@ public class UNav3D : ModuleRules
 				"Slate",
 				"SlateCore",
 				"RenderCore",
-				"RHI"
+				"RHI",
+				"ProceduralMeshComponent",
+				"UnrealEd",
+				"Blutility",
+				"UMG"
 				// "ShaderConductor"
 			}
 			);

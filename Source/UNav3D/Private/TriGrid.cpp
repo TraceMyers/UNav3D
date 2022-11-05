@@ -84,6 +84,10 @@ void TriGrid::Init(const BoundingBox& BBox, const TArray<TempTri>& Tris) {
 					for (int m = 0; m < BoxTriCt; m++) {
 						auto& Temp = *BoxTris[m];
 						Tri* T = new (ContainerCur) Tri(*Temp.A, *Temp.B, *Temp.C);
+						const FVector* Normal = Temp.Normal;
+						if (Normal != nullptr) {
+							T->Normal = *Normal;
+						}
 						ContainerCur++;
 					}
 				}
@@ -157,6 +161,17 @@ TriContainer& TriGrid::GetNearbyTris(const FVector& Location, float Tolerance) {
 
 int TriGrid::Num() const {
 	return _Num;
+}
+
+void TriGrid::SetVertices(FVector* _Vertices) {
+	Vertices = _Vertices;	
+}
+
+void TriGrid::GetIndices(int i, TArray<int32>& Indices) const {
+	Tri& T = ((Tri*)Container)[i];
+	Indices.Add(&T.A - Vertices);
+	Indices.Add(&T.B - Vertices);
+	Indices.Add(&T.C - Vertices);
 }
 
 void TriGrid::SetOutgoing(const FIntVector& GridPos) {

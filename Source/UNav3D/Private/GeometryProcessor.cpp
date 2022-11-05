@@ -331,13 +331,14 @@ void GeometryProcessor::FormMeshesFromGroups(
 		TArray<FVector> NewVertices;
 		NewVertices.Reserve((int)(VertexCt * 0.2f));
 		TArray<TArray<Polygon>>& GroupPolygons = Polygons[i];
+		TArray<FVector*> Normals;
 		for (int j = 0; j < GroupPolygons.Num(); j++) {
 			auto& TMesh = Group[j];
 			if (strcmp(TCHAR_TO_ANSI(*TMesh->MeshActor->GetName()), "DebugMarkerMesh2_2") == 0) {
 				printf("hello\n");
 			}
 			auto& MeshPolygons = GroupPolygons[j];
-			CreateNewTriData(MeshPolygons, NewVertices, NewTriVertexIndices);
+			CreateNewTriData(MeshPolygons, NewVertices, NewTriVertexIndices, Normals);
 		}
 
 		// making new vertex buffer
@@ -370,7 +371,8 @@ void GeometryProcessor::FormMeshesFromGroups(
 			NewTris.Add(TempTri(
 				&NewVertexBuffer[VertexIndices.X + UnchangedVertexCt],
 				&NewVertexBuffer[VertexIndices.Y + UnchangedVertexCt],
-				&NewVertexBuffer[VertexIndices.Z + UnchangedVertexCt]
+				&NewVertexBuffer[VertexIndices.Z + UnchangedVertexCt],
+				Normals[j]
 			));
 		}
 
@@ -381,6 +383,10 @@ void GeometryProcessor::FormMeshesFromGroups(
 		NavMesh.VertexCt = NewVertCt;
 		Geometry::SetBoundingBox(NavMesh, Group);
 		NavMesh.Grid.Init(NavMesh, NewTris);
+		NavMesh.Grid.SetVertices(NewVertexBuffer);
+		for (auto& TMesh : Group) {
+			NavMesh.MeshActors.Add(TMesh->MeshActor);	
+		}
 	}	
 }
 
@@ -606,7 +612,8 @@ void GeometryProcessor::PopulateUnmarkedTriData(
 void GeometryProcessor::CreateNewTriData(
 	TArray<Polygon>& Polygons,
 	TArray<FVector>& Vertices,
-	TArray<FIntVector>& TriVertexIndices
+	TArray<FIntVector>& TriVertexIndices,
+	TArray<FVector*>& Normals
 ) {
 	TArray<Geometry::VERTEX_T> VertTypes;
 	for (auto& Polygon : Polygons) {
@@ -788,6 +795,9 @@ void GeometryProcessor::CreateNewTriData(
 		if (FillSuccess) {
 			Vertices.Append(PolyVerts);
 			TriVertexIndices.Append(TempTriVertexIndices);
+			TArray<FVector*> TriNormals;
+			TriNormals.Init(Polygon.Normal, TempTriVertexIndices.Num());
+			Normals.Append(TriNormals);
 		}
 	}
 }

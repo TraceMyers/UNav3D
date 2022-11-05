@@ -119,3 +119,8 @@ void Tri::MarkProblemCase() {
 void Tri::MarkForPolygon() {
 	Flags |= TRI_TO_POLYGON;	
 }
+
+void Tri::CalculateNormal(FVector& _Normal) const {
+	_Normal = FVector::CrossProduct(A - C, A - B).GetUnsafeNormal();
+}
+

@@ -97,7 +97,8 @@ private:
 	static void CreateNewTriData(
 		TArray<Polygon>& Polygons,
 		TArray<FVector>& Vertices,
-		TArray<FIntVector>& TriVertexIndices
+		TArray<FIntVector>& TriVertexIndices,
+		TArray<FVector*>& Normals
 	);
 };
 

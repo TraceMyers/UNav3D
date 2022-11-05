@@ -113,6 +113,11 @@ public:
 	Tri& operator [] (int i) const {
 		return ((Tri*)Container)[i];
 	}
+
+	void SetVertices(FVector* Vertices);
+
+	// returns the index of the vertex; for drawing mesh
+	inline void GetIndices(int i, TArray<int32>& Indices) const;
 	
 private:
 
@@ -125,6 +130,7 @@ private:
 	static constexpr int CONTAINER_SIDELEN = 8;
 
 	void* Container;
+	FVector* Vertices;
 	int _Num;
 	TriBox Boxes[CONTAINER_SIDELEN][CONTAINER_SIDELEN][CONTAINER_SIDELEN];
 	bool InitSuccess;
