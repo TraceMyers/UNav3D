@@ -17,6 +17,8 @@ AUNav3DBoundsVolume::AUNav3DBoundsVolume() {
 	BoundsBox = CreateDefaultSubobject<UBoxComponent>(TEXT("Bounds Box"));
 	BoundsBox->SetupAttachment(BoundsMesh);
 	BoundsBox->SetBoxExtent(FVector(5.0f, 5.0f, 5.0f));
+	
+	SetFolderPath("/UNav3D");
 }
 
 void AUNav3DBoundsVolume::BeginPlay() {

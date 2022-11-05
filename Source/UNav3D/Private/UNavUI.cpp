@@ -3,6 +3,7 @@
 #include "Engine/StaticMeshActor.h"
 #include "Draw.h"
 #include "Debug.h"
+#include "Kismet/GameplayStatics.h"
 
 // TODO: find ADraw at open and delete
 
@@ -19,6 +20,17 @@ void UNavUI::PostLoad() {
 		return;
 	}
 	UWorld* World = GEditor->GetEditorWorldContext().World();
+
+	// if the editor is exited incorrectly, the previous ADraw object is left in the world
+	TArray<AActor*> DrawActors;
+	UGameplayStatics::GetAllActorsOfClass(World, ADraw::StaticClass(), DrawActors);
+	for (int i = 0; i < DrawActors.Num(); i++) {
+		ADraw* DrawActor = Cast<ADraw>(DrawActors[i]);
+		if (DrawActor != nullptr) {
+			DrawActor->Destroy();
+		}
+	}
+	
 	Draw = Cast<ADraw>(World->SpawnActor(ADraw::StaticClass()));
 }
 

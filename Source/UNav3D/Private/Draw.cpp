@@ -27,6 +27,8 @@ ADraw::ADraw() {
 	
 	static const TCHAR* TriMatPath = TEXT("/UNav3D/Internal/M_Triangle.M_Triangle");
 	TriMaterial = LoadMaterial(TriMatPath);
+	
+	SetFolderPath("/UNav3D");
 }
 
 void ADraw::Init() {
@@ -35,6 +37,7 @@ void ADraw::Init() {
 }
 
 void ADraw::HideAndShowAllNavMeshes() {
+	SetIsTemporarilyHiddenInEditor(true);
 	printf("num sections: %d\n", NavMeshes->GetNumSections());
 	if (NavMeshes->GetNumSections() == 0) {
 		for (auto& NMesh : Data::NMeshes) {
