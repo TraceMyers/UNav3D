@@ -58,13 +58,12 @@ namespace Geometry {
 
 	bool IsEar(const TArray<FVector>& Vertices, const TArray<bool>& VertAvailable, int i, int j, int k);
 
-	// Nobody on the internet (that I found) had this solution, so maybe this is a novel approach?
 	// Given an ordered set of vertices a, b, c, d of a simple polygon, regardless of polygon orientation (cw or ccw),
 	// and given the type of vertex b is known, the type of vertex c can be determined. if b,c,d make an interior
 	// angle of the polygon, this returns VERTEX_INTERIOR, else VERTEX_EXTERIOR.
 	// The normal can be up or down facing - it doesn't matter. W = -(b-a), V = c-b, U = d-c, PrevType = type of b.
-	// To start, you can find an interior vertex by picking any vertex q in P (or any point q in the plane of P),
-	// and getting the farthest vertex from q. That vertex will be interior.
+	// To start, you can find an interior vertex by picking any point q in R^3 and getting the farthest vertex from q.
+	// That vertex will be interior.
 	VERTEX_T GetPolyVertexType(
 		const FVector& Normal, const FVector& W, const FVector& V, const FVector& U, VERTEX_T PrevType
 	);

@@ -670,8 +670,8 @@ void GeometryProcessor::CreateNewTriData(
 			if (Geometry::IsEar(PolyVerts, i, j, k)) {
 				IsEar[j] = true;
 			}
-			// the farthest vertex from any point on the polygon must be the vertex of an interior angle
-			const float DistSq = FVector::DistSquared(A, PolyVerts[j]);
+			// the farthest vertex from any point R^3 must be the vertex of an interior angle
+			const float DistSq = PolyVerts[j].SizeSquared();
 			if (DistSq > LongestDistSq) {
 				LongestDistSq = DistSq;
 				LongestDistIndex = i;
@@ -688,7 +688,7 @@ void GeometryProcessor::CreateNewTriData(
 		if (Geometry::IsEar(PolyVerts, n, 0, 1)) {
 			IsEar[0] = true;
 		}
-		const float DistSq = FVector::DistSquared(A, PolyVerts[n]);
+		const float DistSq = PolyVerts[n].SizeSquared();
 		if (DistSq > LongestDistSq) {
 			LongestDistIndex = n;
 		}
