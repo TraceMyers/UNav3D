@@ -11,9 +11,10 @@ UCLASS()
 class UNAV3D_API ADraw : public AActor {
 	GENERATED_BODY()
 	
-public:	
-	ADraw();
+public:
 	
+	ADraw();
+
 	void Init();
 	
 	void HideAndShowAllNavMeshes();

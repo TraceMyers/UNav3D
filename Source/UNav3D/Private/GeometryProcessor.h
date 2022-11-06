@@ -28,9 +28,14 @@ public:
 	// Takes Populated TriMeshes, groups them by overlap, and reforms the overlapped meshes into continuous meshes
 	// Populates OutMeshes with new
 	static GEOPROC_RESPONSE PopulateNavMeshes(
-		const UWorld* World,
 		TArray<TriMesh>& InMeshes,
 		TArray<UNavMesh>& OutMeshes
+	);
+
+	// re-polygonizes nearby tris with similar normals and reforms triangles from those polygons, simplifying the
+	// meshes
+	static GEOPROC_RESPONSE SimplifyNavMeshes(
+		TArray<UNavMesh>& NMeshes
 	);
 
 private:

@@ -1,5 +1,4 @@
 ﻿#include "GeometryProcessor.h"
-
 #include "Data.h"
 #include "Geometry.h"
 #include "Rendering/PositionVertexBuffer.h"
@@ -61,7 +60,6 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(TriMesh& 
 
 // Does not group Mesh A and Mesh B if Mesh A is entirely inside MeshB, unless Mesh C intersects both
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateNavMeshes(
-	const UWorld* World,
 	TArray<TriMesh>& InMeshes,
 	TArray<UNavMesh>& OutMeshes
 ) {
@@ -74,10 +72,13 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateNavMeshes(
 	
 	BuildPolygonsAtMeshIntersections(IntersectGroups, Polygons);
 
-	// UNavDbg::DrawAllPolygons(World, Polygons);
-
 	FormMeshesFromGroups(IntersectGroups, Polygons, OutMeshes);
 	
+	return GEOPROC_SUCCESS;
+}
+
+GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::SimplifyNavMeshes(TArray<UNavMesh>& NMeshes) {
+	// TODO: parameterize the values that determine the outcome here
 	return GEOPROC_SUCCESS;
 }
 
@@ -257,13 +258,33 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 	TArray<TArray<TriMesh*>>& Groups,
 	TArray<TArray<TArray<Polygon>>>& AllPolygons
 ) {
+	auto& Grid = Data::BoundsVolumeTMesh.Grid;
+	printf("bv tmesh num: %d\n", Grid.Num());
+	for (int i = 0; i < Grid.Num(); i++) {
+		Grid[i].Normal = -Grid[i].Normal;
+	}
 	for (int i = 0; i < Groups.Num(); i++) {
 		TArray<TriMesh*>& Group = Groups[i];
-		TArray<TArray<UnstructuredPolygon>> UPolys; // one upoly per tri
+		TArray<TArray<UnstructuredPolygon>> UPolys;
 		AllPolygons.Add(TArray<TArray<Polygon>>());
 		TArray<TArray<Polygon>>& GroupPolygons = AllPolygons.Last();
 
-		Geometry::PopulateUnstructuredPolygons(Group, UPolys);
+		// slipping the bounds volume tmesh into the group so it creates intersections with other meshes
+		Group.Add(&Data::BoundsVolumeTMesh);
+		const int GroupCt = Group.Num();
+		for (int j = 0; j < GroupCt; j++) {
+			UPolys.Add(TArray<UnstructuredPolygon>());
+			TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
+			// creating an unstructured polygon per tri
+			MeshUPolys.Init(UnstructuredPolygon(), Group[j]->Grid.Num());
+		}
+
+		// get mesh intersections between meshes, including Bounds Volume
+		Geometry::GetUPolygonsFromIntersections(Group, UPolys);
+
+		// removing the bounds volume tmesh since we don't care what intersections landed on it
+		Group.RemoveAt(GroupCt - 1);
+		UPolys.RemoveAt(GroupCt - 1);
 		
 		for (int j = 0; j < UPolys.Num(); j++) {
 			TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
@@ -272,8 +293,12 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 			TArray<Polygon>& TMeshPolygons = GroupPolygons.Last();
 			
 			for (int k = 0; k < MeshUPolys.Num(); k++) {
-				const UnstructuredPolygon& UPoly = MeshUPolys[k];
 				Tri& T = TMesh.Grid[k];
+				if (T.IsTriCull()) {
+					// Tris are marked for cull early if they fall outside of the bounds box
+					continue;
+				}
+				const UnstructuredPolygon& UPoly = MeshUPolys[k];
 				if (UPoly.Edges.Num() == 0) {
 					// if there are no intersections...
 					if (T.AllObscured()) {

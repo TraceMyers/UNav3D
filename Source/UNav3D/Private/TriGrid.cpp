@@ -167,6 +167,10 @@ void TriGrid::SetVertices(FVector* _Vertices) {
 	Vertices = _Vertices;	
 }
 
+void TriGrid::SetTriAt(int i, FVector* A, FVector* B, FVector* C) {
+	Tri* T = new ((Tri*)Container + i) Tri(*A, *B, *C);
+}
+
 void TriGrid::GetIndices(int i, TArray<int32>& Indices) const {
 	Tri& T = ((Tri*)Container)[i];
 	Indices.Add(&T.A - Vertices);

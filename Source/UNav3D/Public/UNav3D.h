@@ -4,6 +4,8 @@
 #include "GeometryProcessor.h"
 
 // TODO: UNav3D should have no private includes
+// NOTE: vertices that are too close together will likely break this plugin
+// NOTE: will require editor utility scripting plugin
 
 #define LOCTEXT_NAMESPACE "UNav3D"
 #define UNAV_GENMSG(x) \

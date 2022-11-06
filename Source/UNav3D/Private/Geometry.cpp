@@ -1,4 +1,6 @@
 ﻿#include "Geometry.h"
+
+#include "Data.h"
 #include "TriMesh.h"
 #include "Tri.h"
 #include "Polygon.h"
@@ -12,6 +14,10 @@ namespace Geometry {
 	static constexpr float ONE_THIRD = 1.0f / 3.0f;
 	static constexpr float NEAR_EPSILON = 3e-2f;
 
+	// -----------------------------------------------------------------------------------------------------------------
+	// -------------------------------------------------------------------------------------------------------- Internal
+	// -----------------------------------------------------------------------------------------------------------------
+	
 	namespace {
 
 		// The unscaled/unrotated/untranslated vertices of a bounding box
@@ -61,7 +67,11 @@ namespace Geometry {
 		// mesh data only populated only at constructor
 		struct MeshHitCounter {
 
-			MeshHitCounter(const TArray<TriMesh*>& TMeshPtrs) {
+			// FudgeBVCt: on reset, if BoundsVolumeTMesh is in the keys, sets it to 1 instead of 0 so
+			// 'inside' becomes 'outside'
+			MeshHitCounter(const TArray<TriMesh*>& TMeshPtrs, bool FudgeBoundsVolumeCt) :
+				FudgeBVCt(FudgeBoundsVolumeCt)
+			{
 				for (int i = 0; i < TMeshPtrs.Num(); i++) {
 					AStaticMeshActor* MeshActor = TMeshPtrs[i]->MeshActor;
 					MeshToCt.Add(MeshActor, 0);
@@ -83,8 +93,21 @@ namespace Geometry {
 			}
 
 			void Reset() {
-				for (int i = 0; i < Keys.Num(); i++) {
-					MeshToCt[Keys[i]] = 0;
+				if (FudgeBVCt) {
+					for (int i = 0; i < Keys.Num(); i++) {
+						AStaticMeshActor* Key = Keys[i];
+						if (Key == Data::BoundsVolumeTMesh.MeshActor) {
+							MeshToCt[Key] = 1;
+						}
+						else {
+							MeshToCt[Key] = 0;
+						}
+					}
+				}
+				else {
+					for (int i = 0; i < Keys.Num(); i++) {
+						MeshToCt[Keys[i]] = 0;
+					}
 				}
 			}
 
@@ -92,6 +115,7 @@ namespace Geometry {
 			
 			TMap<AStaticMeshActor*, int> MeshToCt;
 			TArray<AStaticMeshActor*> Keys;
+			bool FudgeBVCt;
 			
 		};
 
@@ -153,7 +177,7 @@ namespace Geometry {
 			}
 			Internal_SetBBoxAfterVertices(BBox);
 		}
-		
+
 		// If the points were all on a line, you would only need to check magnitude; implicit scaling by cos(theta) in
 		// dot product does the work of checking in 3 dimensions
 		// Ref: https://math.stackexchange.com/questions/1472049/check-if-a-point-is-inside-a-rectangular-shaped-area-3d
@@ -223,7 +247,8 @@ namespace Geometry {
 			const FVector& FacePtB,
 			const FVector& FacePtC,
 			const FVector& Normal, // could calc here, but currently precomputed for BoundingBox
-			FVector& POI
+			FVector& POI,
+			float& HitDistance
 		) {
 			const FVector PVec = Origin - FacePtA;
 			if (FVector::DotProduct(PVec, Normal) <= 0.0f) {
@@ -234,16 +259,17 @@ namespace Geometry {
 				return false;
 			}
 			const float LenOProj = FVector::DotProduct(Normal, PVec);
-			const float RayHitDist = LenOProj / RayNormCosTheta;
-			if (RayHitDist > Length) {
+			HitDistance = LenOProj / RayNormCosTheta;
+			if (HitDistance > Length) {
 				return false;
 			}
-			POI = Origin + Dir * RayHitDist;
+			POI = Origin + Dir * HitDistance;
 			return Internal_DoesPointTouchFace(FacePtA, FacePtB, FacePtC, POI);
 		}
 
 		// thinks in triangles: the one made by the tri plane, origin -> center, origin -> projection
 		// and the one made by the tri plane, origin -> projection, origin -> ray hit. Could be faster, I'm sure.
+		// TODO: check if this could be modified to check in both directions
 		bool Internal_Raycast(
 			const FVector& Origin,
 			const FVector& Dir,
@@ -273,30 +299,58 @@ namespace Geometry {
 			const FVector& LSA,
 			const FVector& LSB,
 			const BoundingBox& BBox,
-			FVector& PointOfIntersection
+			FVector& PointOfIntersection,
+			float& HitDistance
 		) {
 			FVector Dir = LSB - LSA;
 			const float Length = Dir.Size();
 			Dir *= 1.0f / Length;
 			const FVector* Origin = &LSA;
-			for (int i = 0; i < 2; i++) {
-				for (int j = 0; j < BoundingBox::FACE_CT; j++) {
-					const int* FaceIndices = BBoxFaceIndices[j];
-					const FVector& FaceA = BBox.Vertices[FaceIndices[0]];
-					const FVector& FaceB = BBox.Vertices[FaceIndices[1]];
-					const FVector& FaceC = BBox.Vertices[FaceIndices[2]];
-					
-					// only need to check one direction, since this function is used in concert with
-					// Internal_IsPointInsideBox(). If there are no vertices from box A in box B, then an intersecting
-					// edge of A through B is checkable either direction.
-					if (Internal_Raycast(
-						*Origin, Dir, Length, FaceA, FaceB, FaceC, BBox.FaceNormals[j], PointOfIntersection
-					)) {
-						return true;
-					}
+			// checking all lsa -> lsb first rather than alternating because: if the intersection exists, and if you do
+			// IsPointInsideBox() checks before this, checking in either direction will return a positive, so in
+			// those cases each alternating check in the opposite direction is superfluous
+			for (int j = 0; j < BoundingBox::FACE_CT; j++) {
+				const int* FaceIndices = BBoxFaceIndices[j];
+				const FVector& FaceA = BBox.Vertices[FaceIndices[0]];
+				const FVector& FaceB = BBox.Vertices[FaceIndices[1]];
+				const FVector& FaceC = BBox.Vertices[FaceIndices[2]];
+				
+				if (Internal_Raycast(
+					*Origin,
+					Dir,
+					Length,
+					FaceA,
+					FaceB,
+					FaceC,
+					BBox.FaceNormals[j],
+					PointOfIntersection,
+					HitDistance
+				)) {
+					return true;
 				}
-				Dir = -Dir;
-				Origin = &LSB;
+			}
+			Dir = -Dir;
+			Origin = &LSB;
+			for (int j = 0; j < BoundingBox::FACE_CT; j++) {
+				const int* FaceIndices = BBoxFaceIndices[j];
+				const FVector& FaceA = BBox.Vertices[FaceIndices[0]];
+				const FVector& FaceB = BBox.Vertices[FaceIndices[1]];
+				const FVector& FaceC = BBox.Vertices[FaceIndices[2]];
+				
+				if (Internal_Raycast(
+					*Origin,
+					Dir,
+					Length,
+					FaceA,
+					FaceB,
+					FaceC,
+					BBox.FaceNormals[j],
+					PointOfIntersection,
+					HitDistance
+				)) {
+					HitDistance = Length - HitDistance;
+					return true;
+				}
 			}
 			return false;
 		}
@@ -321,10 +375,11 @@ namespace Geometry {
 			return RAY_HIT_NONE;
 		}
 
-		bool Internal_DoBoundingBoxesIntersect(const BoundingBox& BBoxA, const BoundingBox& BBoxB) {
+		bool Internal_DoBoundingBoxesIntersect(const BoundingBox& BBoxA, const BoundingBox& BBoxB, bool BothWays=false) {
 			const BoundingBox* EdgesBoxPtr = &BBoxA;
 			const BoundingBox* FacesBoxPtr = &BBoxB;
 			FVector POI;
+			float HitDist;
 			for (int i = 0; i < 2; i++) {
 				const BoundingBox& EdgesBox = *EdgesBoxPtr;
 				const BoundingBox& FacesBox = *FacesBoxPtr;
@@ -332,9 +387,21 @@ namespace Geometry {
 					const int* EdgeIndices = BBoxEdgeIndices[j];
 					const FVector EdgeA = EdgesBox.Vertices[EdgeIndices[0]];
 					const FVector EdgeB = EdgesBox.Vertices[EdgeIndices[1]];
-					if (Internal_DoesLineSegmentIntersectBox(EdgeA, EdgeB, FacesBox, POI)) {
+					if (Internal_DoesLineSegmentIntersectBox(
+						EdgeA, EdgeB, FacesBox, POI, HitDist
+					)) {
 						return true;
-					}	
+					}
+					// if a test for whether either has points inside each other has already been done,
+					// this is unnecessary, since an intersection would only occur if an edge passed through a box,
+					// making that edge checkable in either direction
+					if (
+						BothWays 
+						&& Internal_DoesLineSegmentIntersectBox(
+							EdgeB, EdgeA, FacesBox, POI, HitDist
+					)) {
+						return true;
+					}
 				}
 				EdgesBoxPtr = &BBoxB;
 				FacesBoxPtr = &BBoxA;
@@ -431,6 +498,7 @@ namespace Geometry {
 		// where the line segment is inside other meshes and where it's outside other meshes; returns true
 		// if A is enclosed. If there are an even number of distances (including 0), B's enclosed status
 		// is the same as A, otherwise opposite
+		// FudgeLast purposefully miscounts the number of hits with the last mesh by 1; useful for boundsvolume collision
 		bool Internal_GetObscuredDistances(
 			const FVector& A,
 			const FVector& B,
@@ -608,10 +676,6 @@ namespace Geometry {
 			auto& TrisA = TMeshA.Grid;
 			auto& TrisB = TMeshB.Grid;
 			
-			FCollisionQueryParams Params;
-			Params.bTraceComplex = true;
-			Params.bIgnoreBlocks = true;
-			
 			for (int i = 0; i < TrisA.Num(); i++) {
 				const Tri& T0 = TrisA[i];
 				UnstructuredPolygon& PolyA = UPolysA[i];
@@ -672,6 +736,10 @@ namespace Geometry {
 			constexpr uint32 flags = PolyEdge::ON_EDGE_AB | PolyEdge::ON_EDGE_BC | PolyEdge::ON_EDGE_CA;
 			for (int i = 0; i < TriGrid.Num(); i++) {
 				Tri& T = TriGrid[i];
+				if (T.IsTriOnBoxEdge()) {
+					// tri intersects the bounds volume; relevant edges already created
+					continue;
+				}
 				if (UPolys[i].Edges.Num() == 0) {
 					// if there are no intersections, just check if the tri points are inside other meshes
 					Internal_IsTriObscured(T, OtherMeshes, MinZ, MHitCtr);
@@ -711,6 +779,7 @@ namespace Geometry {
 			}
 		}
 
+		// as of 11/5/2022, no longer using built-in line tracing
 		// set meshes to respond to built-in line traces; currently unused
 		void Internal_SetMeshesOverlap(TArray<TriMesh>& TMeshes) {
 			for (int i = 0; i < TMeshes.Num(); i++) {
@@ -721,6 +790,7 @@ namespace Geometry {
 			}
 		}
 		
+		// as of 11/5/2022, no longer using built-in line tracing
 		// set meshes to respond to built-in line traces; currently unused
 		void Internal_SetMeshesOverlap(TArray<TriMesh*>& TMeshes) {
 			for (int i = 0; i < TMeshes.Num(); i++) {
@@ -731,6 +801,7 @@ namespace Geometry {
 			}
 		}
 		
+		// as of 11/5/2022, no longer using built-in line tracing
 		// set meshes to ignore built-in line traces; currently unused
 		void Internal_SetMeshesIgnore(TArray<TriMesh>& TMeshes) {
 			for (int i = 0; i < TMeshes.Num(); i++) {
@@ -741,6 +812,7 @@ namespace Geometry {
 			}
 		}
 		
+		// as of 11/5/2022, no longer using built-in line tracing
 		// set meshes to ignore built-in line traces; currently unused
 		void Internal_SetMeshesIgnore(TArray<TriMesh*>& TMeshes) {
 			for (int i = 0; i < TMeshes.Num(); i++) {
@@ -751,6 +823,10 @@ namespace Geometry {
 			}
 		}
 	}
+
+	// -----------------------------------------------------------------------------------------------------------------
+	// -------------------------------------------------------------------------------------------------------- External
+	// -----------------------------------------------------------------------------------------------------------------
 
 	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor) {
 		const FBox MeshFBox = MeshActor->GetStaticMeshComponent()->GetStaticMesh()->GetBoundingBox();
@@ -882,9 +958,10 @@ namespace Geometry {
 		}
 	}
 
-	void PopulateUnstructuredPolygons(
+	void GetUPolygonsFromIntersections(
 		TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
+		bool LastIsBoundsVolume
 	) {
 		FVector GroupBBoxMin;
 		FVector GroupBBoxMax;
@@ -893,12 +970,6 @@ namespace Geometry {
 		const float MinZ = GroupBBoxMin.Z;
 		
 		const int GroupCt = Group.Num();
-		for (int i = 0; i < GroupCt; i++) {
-			GroupUPolys.Add(TArray<UnstructuredPolygon>());
-			TArray<UnstructuredPolygon>& UPolys = GroupUPolys[i];
-			// creating an unstructured polygon per tri
-			UPolys.Init(UnstructuredPolygon(), Group[i]->Grid.Num());
-		}
 		// find all intersections between tris in this group and mark where those intersections are inside
 		// and where they are outside other meshes
 		for (int i = 0; i < GroupCt - 1; i++) {
@@ -910,7 +981,7 @@ namespace Geometry {
 				TArray<TriMesh*> GroupExcludingAandB = Group;
 				GroupExcludingAandB.Remove(&TMeshA);
 				GroupExcludingAandB.Remove(&TMeshB);
-				MeshHitCounter MHitCtr(GroupExcludingAandB);
+				MeshHitCounter MHitCtr(GroupExcludingAandB, true);
 				Internal_FindPolyEdges(
 					TMeshA, TMeshB, GroupExcludingAandB, UPolysA, UPolysB, MHitCtr, BBoxDiagDist
 				);	
@@ -922,7 +993,7 @@ namespace Geometry {
 			TriMesh& TMesh = *Group[i];
 			TArray<TriMesh*> GroupExcludingThisMesh = Group;
 			GroupExcludingThisMesh.Remove(&TMesh);
-			MeshHitCounter MHitCtr(GroupExcludingThisMesh);
+			MeshHitCounter MHitCtr(GroupExcludingThisMesh, true);
 			Internal_PopulatePolyEdgesFromTriEdges(
 				TMesh, GroupExcludingThisMesh, GroupUPolys[i], BBoxDiagDist, MinZ, MHitCtr
 			);

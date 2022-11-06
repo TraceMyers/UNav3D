@@ -40,9 +40,10 @@ namespace Geometry {
 
 	// find all intersections between tris and create a picture of where each tri is inside and where it's outside
 	// other meshes
-	void PopulateUnstructuredPolygons(
+	void GetUPolygonsFromIntersections(
 		TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
+		bool LastIsBoundsVolume=true
 	);
 
 	// Does P (roughly) lie on/inside Triangle ABC?

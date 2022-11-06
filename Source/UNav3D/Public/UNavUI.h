@@ -4,7 +4,6 @@
 #include "Editor/Blutility/Classes/EditorUtilityWidget.h"
 #include "UNavUI.generated.h"
 
-// NOTE: requires editor utility scripting plugin
 class ADraw;
 
 UCLASS(BlueprintType)
@@ -31,7 +30,7 @@ public:
 	void DrawCulledTris();
 
 	UPROPERTY()
-	ADraw* Draw;
+	ADraw* Draw=nullptr;
 
 private:
 

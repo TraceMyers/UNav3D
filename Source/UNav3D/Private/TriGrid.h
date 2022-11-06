@@ -116,6 +116,8 @@ public:
 
 	void SetVertices(FVector* Vertices);
 
+	void SetTriAt(int i, FVector* A, FVector* B, FVector* C);
+
 	// returns the index of the vertex; for drawing mesh
 	inline void GetIndices(int i, TArray<int32>& Indices) const;
 	

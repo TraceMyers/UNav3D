@@ -64,6 +64,10 @@ struct Tri {
 	// are all vertices obscured?
 	inline bool AllObscured() const;
 
+	inline void SetTriOnBoxEdge();
+
+	inline bool IsTriOnBoxEdge() const;
+	
 	void MarkForCull();
 
 	void MarkProblemCase();

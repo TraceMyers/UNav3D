@@ -3,7 +3,7 @@
 	"Version": 1,
 	"VersionName": "1.0",
 	"FriendlyName": "UNav3D",
-	"Description": "Ceiling and wall navigation for the player and AI",
+	"Description": "Ceiling and wall orientation and navigation for players and AI",
 	"Category": "Other",
 	"CreatedBy": "Trace Myers",
 	"CreatedByURL": "",
@@ -24,6 +24,10 @@
 	"Plugins" : [
 		{
 			"Name": "ProceduralMeshComponent",
+			"Enabled": true
+		},
+		{
+			"Name": "EditorScriptingUtilities",
 			"Enabled": true
 		}
 	]

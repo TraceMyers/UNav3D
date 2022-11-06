@@ -10,6 +10,7 @@ namespace {
 		TRI_CULL =			0x0008,
 		TRI_PROBLEM_CASE =	0x0010,
 		TRI_TO_POLYGON =	0x0020,
+		TRI_ON_BOX_EDGE =	0x0100
 	};
 
 	constexpr float ONE_THIRD = 1.0f / 3.0f;
@@ -106,6 +107,14 @@ bool Tri::AnyObscured() const {
 
 bool Tri::AllObscured() const {
 	return IsAObscured() && IsBObscured() && IsCObscured();
+}
+
+void Tri::SetTriOnBoxEdge() {
+	Flags |= TRI_ON_BOX_EDGE;	
+}
+
+bool Tri::IsTriOnBoxEdge() const {
+	return Flags & TRI_ON_BOX_EDGE;	
 }
 
 void Tri::MarkForCull() {

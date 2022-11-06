@@ -11,4 +11,5 @@ namespace Data {
 	TArray<Polygon> FailureCasePolygons;
 	TArray<Tri> CulledTris;
 	AUNav3DBoundsVolume* BoundsVolume;
+	TriMesh BoundsVolumeTMesh;
 }

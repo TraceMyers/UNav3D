@@ -28,6 +28,7 @@ ADraw::ADraw() {
 	static const TCHAR* TriMatPath = TEXT("/UNav3D/Internal/M_Triangle.M_Triangle");
 	TriMaterial = LoadMaterial(TriMatPath);
 	
+	// TODO: Investigate - crashed on this when adding unav3dmovementcomponent to src from editor
 	SetFolderPath("/UNav3D");
 }
 
@@ -44,11 +45,6 @@ void ADraw::HideAndShowAllNavMeshes() {
 	}
 	else {
 		NavMeshes->ClearAllMeshSections();
-		// bool NothingChanged = true;
-		//
-		// if (NavMeshes->IsMeshSectionVisible(0)) {
-		// 	
-		// }
 	}
 }
 
@@ -57,17 +53,17 @@ void ADraw::BeginPlay() {
 }
 
 void ADraw::AddNavMesh(UNavMesh& NMesh) {
+	
 	TArray<FVector> Vertices(NMesh.Vertices, NMesh.VertexCt);
 	TArray<FVector> Normals;
 	Normals.Init(FVector::ZeroVector, Vertices.Num());
 	TArray<int32> Triangles;
-	auto& Grid = NMesh.Grid;
 	TArray<int32> Triangle;
-	TArray<FVector2D> UV0;
 	TArray<FColor> VertexColors;
 	VertexColors.Init(FColor(10, 128, 96, 100), Vertices.Num());
-	TArray<FProcMeshTangent> Tangents;
+	
 	FVector CalculatedNormal;
+	const auto& Grid = NMesh.Grid;
 	for (int j = 0; j < Grid.Num(); j++) {
 		Grid.GetIndices(j, Triangle);
 		Tri& T = Grid[j];
@@ -87,9 +83,12 @@ void ADraw::AddNavMesh(UNavMesh& NMesh) {
 		Triangle.Empty(3);
 	}
 	for (int j = 0; j < Normals.Num(); j++) {
-		Normals[j] = Normals[j].GetSafeNormal();	
+		Normals[j] = Normals[j].GetUnsafeNormal();	
 	}
+	
 	const int NewIndex = NavMeshes->GetNumSections();
+	TArray<FVector2D> UV0;
+	TArray<FProcMeshTangent> Tangents;
 	NavMeshes->CreateMeshSection(
 		NewIndex,
 		Vertices,
