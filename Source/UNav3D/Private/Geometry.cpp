@@ -1,6 +1,7 @@
 ﻿#include "Geometry.h"
 #include "Data.h"
 #include "Debug.h"
+#include "DoubleVector.h"
 #include "TriMesh.h"
 #include "Tri.h"
 #include "Polygon.h"
@@ -12,6 +13,7 @@ namespace Geometry {
 	
 	static constexpr float ONE_THIRD = 1.0f / 3.0f;
 	static constexpr float NEAR_EPSILON = 1e-1f;
+	static constexpr float NEAR_FACTOR = 1.0f + 1e-4f;
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// -------------------------------------------------------------------------------------------------------- Internal
@@ -183,7 +185,7 @@ namespace Geometry {
 		bool Internal_DoesPointTouchTri(const Tri& T, const FVector& P) {
 			return (
 				Tri::GetArea(P, T.A, T.B) + Tri::GetArea(P, T.B, T.C) + Tri::GetArea(P, T.C, T.A)
-				<= T.Area + NEAR_EPSILON
+				<= T.Area * NEAR_FACTOR
 			);
 		}
 
@@ -221,14 +223,14 @@ namespace Geometry {
 			float& HitDistance
 		) {
 			const FVector PVec = Origin - FacePtA;
-			if (FVector::DotProduct(PVec, Normal) <= 0.0f) {
+			const double LenOProj = DoubleVector::DotProduct(Normal, PVec);
+			if (LenOProj <= 0.0) {
 				return false;
 			}
-			const float RayNormCosTheta = FVector::DotProduct(Dir, -Normal);
-			if (RayNormCosTheta <= 0.0f) {
+			const double RayNormCosTheta = DoubleVector::DotProduct(Dir, -Normal);
+			if (RayNormCosTheta <= 0.0) {
 				return false;
 			}
-			const float LenOProj = FVector::DotProduct(Normal, PVec);
 			HitDistance = LenOProj / RayNormCosTheta;
 			if (HitDistance > Length) {
 				return false;
@@ -249,14 +251,14 @@ namespace Geometry {
 			float& HitDistance
 		) {
 			const FVector PVec = Origin - T.A;
-			if (FVector::DotProduct(PVec, T.Normal) <= 0.0f) {
+			const float LenOProj = FVector::DotProduct(T.Normal, PVec);
+			if (LenOProj <= 0.0f) {
 				return false;
 			}
 			const float RayNormCosTheta = FVector::DotProduct(Dir, -T.Normal);
 			if (RayNormCosTheta <= 0.0f) {
 				return false;
 			}
-			const float LenOProj = FVector::DotProduct(T.Normal, PVec);
 			HitDistance = LenOProj / RayNormCosTheta;
 			if (HitDistance > Length) {
 				return false;
@@ -798,13 +800,6 @@ namespace Geometry {
 	// -------------------------------------------------------------------------------------------------------- External
 	// -----------------------------------------------------------------------------------------------------------------
 
-	double DoubleVector::SizeSquared(const FVector& V) {
-		const double X = V.X;
-		const double Y = V.Y;
-		const double Z = V.Z;
-		return X * X + Y * Y + Z * Z;
-	}
-
 	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor) {
 		const FBox MeshFBox = MeshActor->GetStaticMeshComponent()->GetStaticMesh()->GetBoundingBox();
 		const FVector Extent = MeshFBox.GetExtent();
@@ -1035,7 +1030,7 @@ namespace Geometry {
 	bool DoesPointTouchTri(const FVector& A, const FVector& B, const FVector& C, const FVector& P) {
 		return (
 			Tri::GetArea(P, A, B) + Tri::GetArea(P, B, C) + Tri::GetArea(P, C, A)
-			<= Tri::GetArea(A, B, C) + NEAR_EPSILON
+			<= Tri::GetArea(A, B, C) * NEAR_FACTOR
 		);
 	}
 

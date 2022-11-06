@@ -13,11 +13,7 @@ struct UnstructuredPolygon;
 // Geometry's job is to provide information about geometrical objects
 namespace Geometry {
 
-	struct DoubleVector {
-		
-		static double SizeSquared(const FVector& V);
-		
-	};
+	
 
 	enum VERTEX_T {VERTEX_INTERIOR, VERTEX_EXTERIOR};
 	

@@ -8,6 +8,7 @@
 #include "Tri.h"
 #include "Polygon.h"
 #include "Debug.h"
+#include "DoubleVector.h"
 #include "UNavMesh.h"
 #include "Containers/ArrayView.h"
 #include "string.h"
@@ -687,7 +688,7 @@ void GeometryProcessor::CreateNewTriData(
 			// testing whether or i-1,i,i+1 makes an ear - a triangle with no polygon points inside of it
 			IsEar[i] = Geometry::IsEar(Vertex);
 			// the farthest vertex from any point R^3 (here, origin) must be the vertex of an interior angle
-			const double DistSq = Geometry::DoubleVector::SizeSquared(Vertex.Location);	
+			const double DistSq = DoubleVector::SizeSquared(Vertex.Location);	
 			if (DistSq > LongestDistSq) {
 				LongestDistSq = DistSq;
 				LongestDistIndex = i;
