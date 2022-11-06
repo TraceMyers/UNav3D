@@ -673,14 +673,21 @@ namespace Geometry {
 			MeshHitCounter& MHitCtr,
 			const float BBoxDiagDist
 		) {
-			auto& TrisA = TMeshA.Grid;
-			auto& TrisB = TMeshB.Grid;
+			const auto& TrisA = TMeshA.Grid;
+			const auto& TrisB = TMeshB.Grid;
 			
 			for (int i = 0; i < TrisA.Num(); i++) {
 				const Tri& T0 = TrisA[i];
+				if (T0.IsTriCull()) {
+					continue;
+				}
+				
 				UnstructuredPolygon& PolyA = UPolysA[i];
 				for (int j = 0; j < TrisB.Num(); j++) {
 					const Tri& T1 = TrisB[j];
+					if (T1.IsTriCull()) {
+						continue;
+					}
 					
 					const float DistSq = FVector::DistSquared(T0.A, T1.A);
 					// if it's even possible they could intersect...
@@ -736,8 +743,8 @@ namespace Geometry {
 			constexpr uint32 flags = PolyEdge::ON_EDGE_AB | PolyEdge::ON_EDGE_BC | PolyEdge::ON_EDGE_CA;
 			for (int i = 0; i < TriGrid.Num(); i++) {
 				Tri& T = TriGrid[i];
-				if (T.IsTriOnBoxEdge()) {
-					// tri intersects the bounds volume; relevant edges already created
+				if (T.IsTriCull()) {
+					// Tri already culled because it's outside of the bounds volume
 					continue;
 				}
 				if (UPolys[i].Edges.Num() == 0) {
@@ -863,6 +870,15 @@ namespace Geometry {
 		return Internal_DoBoundingBoxesIntersect(BBoxA, BBoxB);
 	}
 
+	bool IsBoxAInBoxB(const BoundingBox& BBoxA, const BoundingBox& BBoxB) {
+		for (int i = 0; i < BoundingBox::VERTEX_CT; i++) {
+			if (!Internal_IsPointInsideBox(BBoxB, BBoxA.Vertices[i])) {
+				return false;
+			}
+		}
+		return true;
+	}
+
 	// Tests along all tri edges for intersections, but only those with indices in PotentialIntersectionIndices
 	bool GetTriMeshIntersectGroups(
 		TArray<int>& IntersectIndices,
@@ -956,6 +972,20 @@ namespace Geometry {
 			Max += Nudge;
 			Min -= Nudge;
 		}
+	}
+
+	void FlagTrisOutsideBox(const BoundingBox& BBox, const TriMesh& TMesh) {
+		const auto& Grid = TMesh.Grid;
+		for (int i = 0; i < Grid.Num(); i++) {
+			Tri& T = Grid[i];
+			if (
+				!Internal_IsPointInsideBox(BBox, T.A)
+				&& !Internal_IsPointInsideBox(BBox, T.B)
+				&& !Internal_IsPointInsideBox(BBox,T.C)
+			) {
+				T.MarkForCull();	
+			}	
+		}	
 	}
 
 	void GetUPolygonsFromIntersections(

@@ -25,6 +25,9 @@ namespace Geometry {
 	// Checks whether or not the two bounding boxes overlap. Seemingly necessary to do this on our own for editor plugin.
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB);
 
+	// checks whether B fully envelops A
+	bool IsBoxAInBoxB(const BoundingBox& BBoxA, const BoundingBox& BBoxB);
+
 	// Checks whether two meshes overlap. Only those meshes in TMeshes with an index in PotentialOverlapIndices are checked.
 	bool GetTriMeshIntersectGroups(
 		TArray<int>& OverlapIndices,
@@ -38,8 +41,10 @@ namespace Geometry {
 
 	void GetAxisAlignedExtrema(const BoundingBox& BBox, FVector& Min, FVector& Max, float NudgeOutward=0.0f);
 
+	void FlagTrisOutsideBox(const BoundingBox& BBox, const TriMesh& TMesh);
+
 	// find all intersections between tris and create a picture of where each tri is inside and where it's outside
-	// other meshes
+	// other meshes; if 'inside' edges connect, they form polygons
 	void GetUPolygonsFromIntersections(
 		TArray<TriMesh*>& Group,
 		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
@@ -53,6 +58,13 @@ namespace Geometry {
 
 	bool IsEar(const TArray<FVector>& Vertices, const TArray<bool>& VertAvailable, int i, int j, int k);
 
+	// Nobody on the internet (that I found) had this solution, so maybe this is a novel approach?
+	// Given an ordered set of vertices a, b, c, d of a simple polygon, regardless of polygon orientation (cw or ccw),
+	// and given the type of vertex b is known, the type of vertex c can be determined. if b,c,d make an interior
+	// angle of the polygon, this returns VERTEX_INTERIOR, else VERTEX_EXTERIOR.
+	// The normal can be up or down facing - it doesn't matter. W = -(b-a), V = c-b, U = d-c, PrevType = type of b.
+	// To start, you can find an interior vertex by picking any vertex q in P (or any point q in the plane of P),
+	// and getting the farthest vertex from q. That vertex will be interior.
 	VERTEX_T GetPolyVertexType(
 		const FVector& Normal, const FVector& W, const FVector& V, const FVector& U, VERTEX_T PrevType
 	);

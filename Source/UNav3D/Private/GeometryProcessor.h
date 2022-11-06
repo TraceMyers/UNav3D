@@ -60,8 +60,8 @@ private:
 		TArray<TriMesh>& InMeshes
 	);
 
-	// Any tris that have vertices inside other meshes have those vertices flagged
-	static void FlagObscuredTris(const UWorld* World, TArray<TArray<TriMesh*>>& Groups);
+	// flag tris fully outside the bounds valume for cull
+	static void FlagOutsideTris(TArray<TArray<TriMesh*>>& Groups);
 
 	// Find where meshes intersect and build polygons out of the exposed portions of tris
 	static void BuildPolygonsAtMeshIntersections(

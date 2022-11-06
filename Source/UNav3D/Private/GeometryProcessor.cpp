@@ -65,13 +65,13 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateNavMeshes(
 ) {
 	OutMeshes.Reserve(InMeshes.Num());
 	TArray<TArray<TriMesh*>> IntersectGroups;
-	
+
 	GetIntersectGroups(IntersectGroups, InMeshes);
 	UNavDbg::PrintTriMeshIntersectGroups(IntersectGroups);
 	TArray<TArray<TArray<Polygon>>> Polygons;
 	
+	FlagOutsideTris(IntersectGroups);
 	BuildPolygonsAtMeshIntersections(IntersectGroups, Polygons);
-
 	FormMeshesFromGroups(IntersectGroups, Polygons, OutMeshes);
 	
 	return GEOPROC_SUCCESS;
@@ -238,19 +238,16 @@ void GeometryProcessor::GetIntersectGroups(
 	}
 }
 
-void GeometryProcessor::FlagObscuredTris(const UWorld* World, TArray<TArray<TriMesh*>>& Groups) {
-	// for (int i = 0; i < Groups.Num(); i++) {
-	// 	TArray<TriMesh*>& Group = Groups[i];
-	// 	FVector GroupBBoxMin;
-	// 	FVector GroupBBoxMax;
-	// 	Geometry::GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
-	// 	for (int j = 0; j < Group.Num(); j++) {
-	// 		TriMesh* CurTMesh = Group[j];
-	// 		TArray<TriMesh*> OtherTMeshes = Group;
-	// 		OtherTMeshes.Remove(CurTMesh);
-	// 		Geometry::FlagObscuredTris(World, *CurTMesh, OtherTMeshes, GroupBBoxMin);
-	// 	}
-	// }
+void GeometryProcessor::FlagOutsideTris(TArray<TArray<TriMesh*>>& Groups) {
+	for (int i = 0; i < Groups.Num(); i++) {
+		TArray<TriMesh*>& Group = Groups[i];
+		for (int j = 0; j < Group.Num(); j++) {
+			TriMesh& TMesh = *Group[j];
+			if (!Geometry::IsBoxAInBoxB(TMesh.Box, Data::BoundsVolumeTMesh.Box)) {
+				Geometry::FlagTrisOutsideBox(Data::BoundsVolumeTMesh.Box, TMesh);
+			}
+		}
+	}
 }
 
 // this one's a bit long

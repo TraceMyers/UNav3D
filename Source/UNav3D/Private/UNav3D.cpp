@@ -163,20 +163,11 @@ bool FUNav3DModule::PopulateTriMeshes(TArray<TriMesh>& TMeshes) const {
 			UNAV_GENERR("Bounds volume mesh was not populated correctly.")
 			return false;
 		}
-		// flipping the bounds volume normals because triangles that are inside other meshes are culled; we
-		// want to cull triangles outside the bounds volume
-		auto &BVGrid = Data::BoundsVolumeTMesh.Grid;
-		for (int i = 0; i < BVGrid.Num(); i++) {
-			auto& T = BVGrid[i];
-			// BVGrid.SetTriAt(i, &T.C, &T.B, &T.A);
-			// printf("\n");
-		}
 	}
 
 	// getting geometry data and populating the TriMeshes with it
 	for (int i = 0; i < TMeshes.Num(); i++) {
 		
-		// setting the meshes to overlap in the trace channel used by this plugin
 		TriMesh& TMesh = TMeshes[i];
 		
 		const GeometryProcessor::GEOPROC_RESPONSE Response = GeomProcessor.PopulateTriMesh(TMesh);
