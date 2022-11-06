@@ -1,6 +1,7 @@
 ﻿#pragma once
 #include "TriMesh.h"
 
+struct PolyNode;
 class AStaticMeshActor;
 class UBoxComponent;
 
@@ -9,7 +10,14 @@ struct BoundingBox;
 struct TriMesh;
 struct UnstructuredPolygon;
 
+// Geometry's job is to provide information about geometrical objects
 namespace Geometry {
+
+	struct DoubleVector {
+		
+		static double SizeSquared(const FVector& V);
+		
+	};
 
 	enum VERTEX_T {VERTEX_INTERIOR, VERTEX_EXTERIOR};
 	
@@ -54,9 +62,9 @@ namespace Geometry {
 	// Does P (roughly) lie on/inside Triangle ABC?
 	bool DoesPointTouchTri(const FVector& A, const FVector& B, const FVector& C, const FVector& P);
 
-	bool IsEar(const TArray<FVector>& Vertices, int i, int j, int k);
-
-	bool IsEar(const TArray<FVector>& Vertices, const TArray<bool>& VertAvailable, int i, int j, int k);
+	// Tests if P.Prev, P and P.Next make a triangle that contains no other points in the polygon
+	// polygon must have >= 4 vertices
+	bool IsEar(const PolyNode& P);
 
 	// Given an ordered set of vertices a, b, c, d of a simple polygon, regardless of polygon orientation (cw or ccw),
 	// and given the type of vertex b is known, the type of vertex c can be determined. if b,c,d make an interior

@@ -5,10 +5,11 @@ class UStaticMesh;
 struct TriMesh;
 struct Tri;
 struct UnstructuredPolygon;
-struct PolyNode;
+struct UPolyNode;
 struct Polygon;
 struct UNavMesh;
 
+// GeometryProcessor's job to work on geometrical objects, given information learned by using Geometry.h
 class GeometryProcessor {
 	
 public:
@@ -79,16 +80,16 @@ private:
 	// is inside and where it's outside of other meshes. those points *should* link up with points on
 	// other edges, and exposed sections should link up to form polygons. this function creates nodes
 	// and links them together into graphs
-	static void PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<PolyNode>& PolygonNodes);
+	static void PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<UPolyNode>& PolygonNodes);
 
 	// helper to PopulateNodes that searches for whether or not nodes exist at A and B first, adds
 	// if not, and links them
-	static void AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, const FVector& B);
+	static void AddUPolyNodes(TArray<UPolyNode>& Nodes, const FVector& A, const FVector& B);
 
 	// makes n polygons given n closed loop graphs created by intersections + edges on a tri
 	static void BuildPolygonsFromTri(
 		Tri& T,
-		TArray<PolyNode>& PolygonNodes,
+		TArray<UPolyNode>& PolygonNodes,
 		TArray<Polygon>& TMeshPolygons,
 		int TriIndex
 	);
@@ -99,11 +100,14 @@ private:
 		TArray<FIntVector>& TriVertexIndices
 	);
 
+	// attempts to create a new set of tris from each polygon. assumes simple polygons of >= 3 vertices
 	static void CreateNewTriData(
 		TArray<Polygon>& Polygons,
 		TArray<FVector>& Vertices,
 		TArray<FIntVector>& TriVertexIndices,
 		TArray<FVector*>& Normals
 	);
+
+	static inline void LinkPolygonEdges(Polygon& P);
 };
 

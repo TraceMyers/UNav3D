@@ -14,6 +14,7 @@
 
 // TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until...
 // TODO: ... there is a good system in place to take that input from the user
+// TODO: batch processing, at least per group
 
 GeometryProcessor::GeometryProcessor() {}
 
@@ -250,7 +251,6 @@ void GeometryProcessor::FlagOutsideTris(TArray<TArray<TriMesh*>>& Groups) {
 	}
 }
 
-// this one's a bit long
 void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 	TArray<TArray<TriMesh*>>& Groups,
 	TArray<TArray<TArray<Polygon>>>& AllPolygons
@@ -312,7 +312,7 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 					continue;
 				}
 
-				TArray<PolyNode> PolygonNodes;
+				TArray<UPolyNode> PolygonNodes;
 				
 				// creating graphs where edges (intersections and tri edges) connect, and where they're visible
 				PopulateNodes(T, UPoly, PolygonNodes);
@@ -324,6 +324,13 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 				// TODO: ... add if ever touches edge, else subtract unless enclosed by subtract polygon
 			}
 		}
+	}
+	for (auto& GroupPolygons : AllPolygons) {
+		for (auto& MeshPolygons : GroupPolygons) {
+			for (auto& Polygon : MeshPolygons) {
+				LinkPolygonEdges(Polygon);
+			}
+		}	
 	}
 }
 
@@ -415,7 +422,7 @@ void GeometryProcessor::FormMeshesFromGroups(
 	}	
 }
 
-void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<PolyNode>& PolygonNodes) {
+void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<UPolyNode>& PolygonNodes) {
 	const TArray<PolyEdge>& Edges = UPoly.Edges;
 	for (int i = 0; i < Edges.Num(); i++) {
 		const PolyEdge& PEdge = Edges[i];
@@ -423,7 +430,7 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 		if (PtDistances.Num() == 0) {
 			// A is not enclosed here, so is B, so create 2 nodes. else, none
 			if (!PEdge.IsAEnclosed()) {
-				AddPolyNodes(PolygonNodes, PEdge.A, PEdge.B);
+				AddUPolyNodes(PolygonNodes, PEdge.A, PEdge.B);
 			}
 			continue;
 		}
@@ -437,7 +444,7 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 		if (PEdge.IsAEnclosed()) {
 			StartLoc = PEdge.A + Dir * PtDistances[0];
 			if (PtDistCt == 1) {
-				AddPolyNodes(PolygonNodes, StartLoc, PEdge.B);
+				AddUPolyNodes(PolygonNodes, StartLoc, PEdge.B);
 				continue;	
 			}
 			start_j = 1;
@@ -449,13 +456,13 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 
 		for (int j = start_j; ; ) {
 			FVector EndLoc = PEdge.A + Dir * PtDistances[j];
-			AddPolyNodes(PolygonNodes, StartLoc, EndLoc);
+			AddUPolyNodes(PolygonNodes, StartLoc, EndLoc);
 			if (++j == PtDistCt) {
 				break;		
 			}
 			StartLoc = PEdge.A + Dir * PtDistances[j];
 			if (++j == PtDistCt) {
-				AddPolyNodes(PolygonNodes, StartLoc, PEdge.B);
+				AddUPolyNodes(PolygonNodes, StartLoc, PEdge.B);
 				break;
 			}
 		}
@@ -465,12 +472,12 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 	}
 }
 
-void GeometryProcessor::AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, const FVector& B) {
+void GeometryProcessor::AddUPolyNodes(TArray<UPolyNode>& Nodes, const FVector& A, const FVector& B) {
 	constexpr float EPSILON = 1e-2f;
 	int i0 = -1;
 	int i1 = -1;
 	for (int i = 0; i < Nodes.Num(); i++) {
-		PolyNode& PNode = Nodes[i];
+		UPolyNode& PNode = Nodes[i];
 		if (i0 == -1 && FVector::Dist(A, PNode.Location) < EPSILON) {
 			i0 = i;
 			if (i1 != -1) {
@@ -485,10 +492,10 @@ void GeometryProcessor::AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, 
 		}
 	}
 	if (i0 == -1) {
-		i0 = Nodes.Add(PolyNode(A));
+		i0 = Nodes.Add(UPolyNode(A));
 	}
 	if (i1 == -1) {
-		i1 = Nodes.Add(PolyNode(B));
+		i1 = Nodes.Add(UPolyNode(B));
 	}
 	ADDPOLY_LINK:
 	Nodes[i0].Edges.Add(i1);
@@ -497,7 +504,7 @@ void GeometryProcessor::AddPolyNodes(TArray<PolyNode>& Nodes, const FVector& A, 
 
 void GeometryProcessor::BuildPolygonsFromTri(
 	Tri& T,
-	TArray<PolyNode>& PolygonNodes,
+	TArray<UPolyNode>& PolygonNodes,
 	TArray<Polygon>& TMeshPolygons,
 	int TriIndex
 ) {
@@ -518,7 +525,7 @@ void GeometryProcessor::BuildPolygonsFromTri(
 	// if the tri makes it here, its PolygonNodes array is fairly likely composed of one or more closed
 	// loops that can be used to form polygon(s)
 	for (int StartIndex = 0; StartIndex < NodeCt; ) {
-		PolyNode& StartNode = PolygonNodes[StartIndex];
+		UPolyNode& StartNode = PolygonNodes[StartIndex];
 		TArray<int>* EdgeIndices = &StartNode.Edges;
 		
 		// check to make sure the node isn't exhausted
@@ -528,9 +535,9 @@ void GeometryProcessor::BuildPolygonsFromTri(
 		}
 		
 		Polygon BuildingPolygon(TriIndex);
-		BuildingPolygon.Vertices.Add(StartNode.Location);
+		BuildingPolygon.Vertices.Add(PolyNode(StartNode.Location));
 		int PrevIndex = StartIndex;
-		int k = 0;
+		
 		while (true) {
 			const int EdgeIndex = (*EdgeIndices)[0];
 			if (EdgeIndex == StartIndex) {
@@ -547,7 +554,7 @@ void GeometryProcessor::BuildPolygonsFromTri(
 				break;
 			}
 			// connect to another node
-			PolyNode& EdgeNode = PolygonNodes[EdgeIndex];
+			UPolyNode& EdgeNode = PolygonNodes[EdgeIndex];
 			BuildingPolygon.Vertices.Add(EdgeNode.Location);
 
 			// remove the connection both ways
@@ -640,7 +647,6 @@ void GeometryProcessor::PopulateUnmarkedTriData(
 
 // https://www.geometrictools.com/Documentation/TriangulationByEarClipping.pdf
 // Ear clipping is a bit slow compared to other methods, but it's the easiest to implement
-// TODO: a closed, doubly linked list would make this MUCH simpler
 void GeometryProcessor::CreateNewTriData(
 	TArray<Polygon>& Polygons,
 	TArray<FVector>& Vertices,
@@ -649,190 +655,131 @@ void GeometryProcessor::CreateNewTriData(
 ) {
 	TArray<Geometry::VERTEX_T> VertTypes;
 	for (auto& Polygon : Polygons) {
-		const FVector& PolyNormal = *Polygon.Normal;	
-		TArray<FVector>& PolyVerts = Polygon.Vertices;
+		TArray<PolyNode>& PolyVerts = Polygon.Vertices;
+		const FVector& PolyNormal = *Polygon.Normal;
 		const int PolyVertCt = PolyVerts.Num();
-		const int PolyVertCtM1 = PolyVertCt - 1;
-		VertTypes.Init(Geometry::VERTEX_INTERIOR, PolyVertCt);
+		const int AddVerticesOffset = Vertices.Num();
 
-		const FVector& A = PolyVerts[0];
-		float LongestDistSq = FLT_MIN;
+		if (PolyVertCt == 3) {
+			for (int i = 0; i < PolyVerts.Num(); i++) {
+				Vertices.Add(PolyVerts[i].Location);
+			}
+			TriVertexIndices.Add(FIntVector(
+				AddVerticesOffset,
+				AddVerticesOffset + 1,
+				AddVerticesOffset + 2
+			));
+			Normals.Add(Polygon.Normal);
+			continue;
+		}
+
+		double LongestDistSq = DBL_MIN;
 		int LongestDistIndex = -1;
 		
 		TArray<bool> IsEar;
 		TArray<FVector> NextVertVec;
 		IsEar.Init(false, PolyVertCt);
 		NextVertVec.Reserve(PolyVertCt);
-		for (int i = 0; i < PolyVertCt - 2; i++) {
-			// testing whether or ijk makes an ear - a triangle with no polygon points inside of it
-			const int j = i + 1;
-			const int k = j + 1;
-			if (Geometry::IsEar(PolyVerts, i, j, k)) {
-				IsEar[j] = true;
-			}
-			// the farthest vertex from any point R^3 must be the vertex of an interior angle
-			const float DistSq = PolyVerts[j].SizeSquared();
+		
+		for (int i = 0; i < PolyVertCt; i++) {
+			PolyNode& Vertex = PolyVerts[i];
+			// testing whether or i-1,i,i+1 makes an ear - a triangle with no polygon points inside of it
+			IsEar[i] = Geometry::IsEar(Vertex);
+			// the farthest vertex from any point R^3 (here, origin) must be the vertex of an interior angle
+			const double DistSq = Geometry::DoubleVector::SizeSquared(Vertex.Location);	
 			if (DistSq > LongestDistSq) {
 				LongestDistSq = DistSq;
 				LongestDistIndex = i;
 			}
 			// getting the vector from each vertex to the next
-			NextVertVec.Add(PolyVerts[j] - PolyVerts[i]);
+			NextVertVec.Add(Vertex.Next->Location - Vertex.Location);
 		}
-		// finishing up from loop; linked list would make this unnecessary
-		const int m = PolyVertCt - 2;
-		const int n = PolyVertCtM1;
-		if (Geometry::IsEar(PolyVerts, m, n, 0)) {
-			IsEar[n] = true;
-		}
-		if (Geometry::IsEar(PolyVerts, n, 0, 1)) {
-			IsEar[0] = true;
-		}
-		const float DistSq = PolyVerts[n].SizeSquared();
-		if (DistSq > LongestDistSq) {
-			LongestDistIndex = n;
-		}
-		NextVertVec.Add(PolyVerts[n] - PolyVerts[m]);
-		NextVertVec.Add(PolyVerts[0] - PolyVerts[n]);
-
+		
 		// starting on a known interior angled vertex allows us to walk along the polygon and determine the types
 		// of the rest.
-		int u = LongestDistIndex + 1;
-		if (u == PolyVertCt) {
-			u = 0;
+		{
+			VertTypes.Init(Geometry::VERTEX_INTERIOR, PolyVertCt);
+			const PolyNode* KnownInterior = &PolyVerts[LongestDistIndex];
+			for (const PolyNode* WalkNode = KnownInterior->Next; WalkNode != KnownInterior; WalkNode = WalkNode->Next) {
+				const int CurIndex = WalkNode->PolygonIndex;
+				const PolyNode& Prev = *WalkNode->Prev;
+				const int Prev1Index = Prev.PolygonIndex;
+				const int Prev2Index = Prev.Prev->PolygonIndex;
+				// WalkNode being checked for interior/exterior - whether the acute angle made by the 3 vertices falls
+				// inside the polygon or outside it
+				VertTypes[CurIndex] = Geometry::GetPolyVertexType(
+					PolyNormal,
+					-NextVertVec[Prev2Index],
+					NextVertVec[Prev1Index],
+					NextVertVec[CurIndex],
+					VertTypes[Prev1Index]
+				);
+			}
 		}
-		do {
-			int Ind1 = u - 1;
-			int Ind0 = u - 2;
-			if (Ind1 < 0) {
-				Ind1 = PolyVertCtM1;
-				Ind0 = PolyVertCt - 2;
-			}
-			else if (Ind0 < 0) {
-				Ind0 = PolyVertCtM1;
-			}
-			// vert i being checked for interior/exterior - whether the acute angle made by the 3 vertices falls
-			// inside the polygon or outside it
-			VertTypes[u] = Geometry::GetPolyVertexType(
-				PolyNormal, -NextVertVec[Ind0], NextVertVec[Ind1], NextVertVec[u], VertTypes[Ind1]
-			);	
-
-			if (++u == PolyVertCt) {
-				u = 0;
-			}
-		} while (u != LongestDistIndex);
 
 		int AvailableCt = PolyVertCt;
 		bool FillSuccess = false;
-		const int AddVerticesOffset = Vertices.Num();
-		TArray<bool> VertAvailable;
-		VertAvailable.Init(true, PolyVertCt);
 		TArray<FIntVector> TempTriVertexIndices;
-		
-		for (int i = 0, FailCt = 0; FailCt < AvailableCt; ) {
-			if (VertAvailable[i] && IsEar[i] && VertTypes[i] == Geometry::VERTEX_INTERIOR) {
+
+		const PolyNode* WalkNode = &PolyVerts[0];
+		for (int FailCt = 0; FailCt < AvailableCt; ) {
+			const int CurIndex = WalkNode->PolygonIndex;
+			if (IsEar[CurIndex] && VertTypes[CurIndex] == Geometry::VERTEX_INTERIOR) {
 				FailCt = 0;
-				int AIndex = i - 1;
-				const int BIndex = i;
-				int CIndex = i + 1;
-				if (AIndex < 0) {
-					AIndex = PolyVertCtM1;
-				}
-				while (!VertAvailable[AIndex]) {
-					if (--AIndex < 0) {
-						AIndex = PolyVertCtM1;
-					}
-				}
-				if (CIndex == PolyVertCt) {
-					CIndex = 0;
-				}
-				while (!VertAvailable[CIndex]) {
-					if (++CIndex == PolyVertCt) {
-						CIndex = 0;
-					}
-				}
+				PolyNode* Prev = WalkNode->Prev;
+				PolyNode* Next = WalkNode->Next;
+				const int PrevIndex = Prev->PolygonIndex;
+				const int NextIndex = Next->PolygonIndex;
+				
 				TempTriVertexIndices.Add(FIntVector(
-					AIndex + AddVerticesOffset, BIndex + AddVerticesOffset, CIndex + AddVerticesOffset
+					PrevIndex + AddVerticesOffset,
+					CurIndex + AddVerticesOffset,
+					NextIndex + AddVerticesOffset
 				));
-				if (--AvailableCt == 2) {
-					// TODO: can just check at head of loop if 3 vertices
-					FillSuccess = true;
-					break;
-				}
+				Prev->Next = Next;
+				Next->Prev = Prev;
 				
-				VertAvailable[BIndex] = false;
-				
-				int PreA1Index = AIndex - 1;
-				if (PreA1Index < 0) {
-					PreA1Index = PolyVertCtM1;
-				}
-				while (!VertAvailable[PreA1Index]) {
-					if (--PreA1Index < 0) {
-						PreA1Index = PolyVertCtM1;
-					}
-				}
-				int PreA2Index = PreA1Index - 1;
-				if (PreA2Index < 0) {
-					PreA2Index = PolyVertCtM1;
-				}
-				while (!VertAvailable[PreA2Index]) {
-					if (--PreA2Index < 0) {
-						PreA2Index = PolyVertCtM1;
-					}
-				}
-				if (AvailableCt == 3) {
+				if (--AvailableCt == 3) {
 					TempTriVertexIndices.Add(FIntVector(
-						PreA2Index + AddVerticesOffset, PreA1Index + AddVerticesOffset, AIndex + AddVerticesOffset
+						 PrevIndex + AddVerticesOffset,
+						 NextIndex + AddVerticesOffset,
+						 Next->Next->PolygonIndex + AddVerticesOffset
 					));
 					FillSuccess = true;
 					break;
 				}
-				int PostCIndex = CIndex + 1;
-				if (PostCIndex == PolyVertCt) {
-					PostCIndex = 0;
-				}
-				while (!VertAvailable[PostCIndex]) {
-					if (++PostCIndex == PolyVertCt) {
-						PostCIndex = 0;
-					}
-				}
-			
-				VertAvailable[PreA1Index] = false;
-				VertAvailable[AIndex] = false;
-				VertAvailable[CIndex] = false;
-				IsEar[AIndex] = Geometry::IsEar(PolyVerts, VertAvailable, PreA1Index, AIndex, CIndex);
-				VertAvailable[PreA1Index] = true;
 				
-				VertAvailable[PostCIndex] = false;
-				IsEar[CIndex] = Geometry::IsEar(PolyVerts, VertAvailable, AIndex, CIndex, PostCIndex);
-				VertAvailable[AIndex] = true;
-				VertAvailable[CIndex] = true;
-				VertAvailable[PostCIndex] = true;
+				IsEar[PrevIndex] = Geometry::IsEar(*Prev);
+				IsEar[NextIndex] = Geometry::IsEar(*Next);
+
+				const PolyNode& BackOnce = *Prev->Prev;
+				const int BackOnceIndex = BackOnce.PolygonIndex;
+				const int BackTwiceIndex = BackOnce.Prev->PolygonIndex;
 				
-				VertTypes[AIndex] = Geometry::GetPolyVertexType(
+				VertTypes[PrevIndex] = Geometry::GetPolyVertexType(
 					PolyNormal,
-					-NextVertVec[PreA2Index],
-					NextVertVec[PreA1Index],
-					NextVertVec[AIndex],
-					VertTypes[PreA1Index]
+					-NextVertVec[BackTwiceIndex],
+					NextVertVec[BackOnceIndex],
+					NextVertVec[PrevIndex],
+					VertTypes[BackOnceIndex]
 				);
-				VertTypes[CIndex] = Geometry::GetPolyVertexType(
+				VertTypes[NextIndex] = Geometry::GetPolyVertexType(
 					PolyNormal,
-					-NextVertVec[PreA1Index],
-					NextVertVec[AIndex],
-					NextVertVec[CIndex],
-					VertTypes[AIndex]
+					-NextVertVec[BackOnceIndex],
+					NextVertVec[PrevIndex],
+					NextVertVec[NextIndex],
+					VertTypes[PrevIndex]
 				);
 			}
 			else {
 				FailCt++;
 			}
-			if (++i == PolyVertCt) {
-				i = 0;
-			}
+			WalkNode = WalkNode->Next;
 		}
 		if (FillSuccess) {
-			Vertices.Append(PolyVerts);
+			for (int i = 0; i < PolyVerts.Num(); i++) {
+				Vertices.Add(PolyVerts[i].Location);
+			}
 			TriVertexIndices.Append(TempTriVertexIndices);
 			TArray<FVector*> TriNormals;
 			TriNormals.Init(Polygon.Normal, TempTriVertexIndices.Num());
@@ -842,4 +789,23 @@ void GeometryProcessor::CreateNewTriData(
 			Data::FailureCasePolygons.Add(Polygon);
 		}
 	}
+}
+
+void GeometryProcessor::LinkPolygonEdges(Polygon& P) {
+	auto& PolyVerts = P.Vertices;
+	const int VertCtM1 = PolyVerts.Num() - 1;
+	for (int i = 1; i < VertCtM1; i++) {
+		PolyNode& Vertex = PolyVerts[i];
+		Vertex.PolygonIndex = i;
+		Vertex.Prev = &PolyVerts[i-1];
+		Vertex.Next = &PolyVerts[i+1];
+	}
+	PolyNode& V0 = PolyVerts[0];
+	PolyNode& VL = PolyVerts[VertCtM1];
+	V0.Prev = &VL;
+	V0.Next = &PolyVerts[1];
+	V0.PolygonIndex = 0;
+	VL.Prev = &PolyVerts[VertCtM1-1];
+	VL.Next = &V0;
+	VL.PolygonIndex = VertCtM1;
 }

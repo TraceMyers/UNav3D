@@ -1,12 +1,10 @@
 ﻿#include "Geometry.h"
-
 #include "Data.h"
 #include "TriMesh.h"
 #include "Tri.h"
 #include "Polygon.h"
 #include "UNavMesh.h"
 #include "Components/BoxComponent.h"
-#include "Datasmith/DatasmithCore/Public/DatasmithDefinitions.h"
 #include "Engine/StaticMeshActor.h"
 
 namespace Geometry {
@@ -835,6 +833,13 @@ namespace Geometry {
 	// -------------------------------------------------------------------------------------------------------- External
 	// -----------------------------------------------------------------------------------------------------------------
 
+	double DoubleVector::SizeSquared(const FVector& V) {
+		const double X = V.X;
+		const double Y = V.Y;
+		const double Z = V.Z;
+		return X * X + Y * Y + Z * Z;
+	}
+
 	void SetBoundingBox(BoundingBox& BBox, const AStaticMeshActor* MeshActor) {
 		const FBox MeshFBox = MeshActor->GetStaticMeshComponent()->GetStaticMesh()->GetBoundingBox();
 		const FVector Extent = MeshFBox.GetExtent();
@@ -1040,33 +1045,9 @@ namespace Geometry {
 		);
 	}
 
-	bool IsEar(const TArray<FVector>& Vertices, int i, int j, int k) {
-		const FVector& A = Vertices[i];
-		const FVector& B = Vertices[j];
-		const FVector& C = Vertices[k];
-		const int VertexCt = Vertices.Num();
-		if (i >= VertexCt - 2) {
-			for (int m = k + 1; m < i; m++) {
-				if (DoesPointTouchTri(A, B, C, Vertices[m])) {
-					return false;
-				}
-			}
-		}
-		else for (int m = 0; m < VertexCt; m++) {
-			if ((m < i || m > k) && DoesPointTouchTri(A, B, C, Vertices[m])) {
-				return false;
-			}
-		}	
-		return true;
-	}
-
-	bool IsEar(const TArray<FVector>& Vertices, const TArray<bool>& VertAvailable, int i, int j, int k) {
-		const FVector& A = Vertices[i];
-		const FVector& B = Vertices[j];
-		const FVector& C = Vertices[k];
-		const int VertexCt = Vertices.Num();
-		for (int m = 0; m < VertexCt; m++) {
-			if (VertAvailable[m] && DoesPointTouchTri(A, B, C, Vertices[m])) {
+	bool IsEar(const PolyNode& P) {
+		for (const PolyNode* WalkNode = P.Next->Next; WalkNode != P.Prev; WalkNode = WalkNode->Next) {
+			if (DoesPointTouchTri(P.Prev->Location, P.Location, P.Next->Location, WalkNode->Location)) {
 				return false;
 			}
 		}

@@ -1,13 +1,25 @@
 ﻿#pragma once
 
+struct PolyNode {
+	PolyNode(const FVector& _Location) :
+		Location(_Location), PolygonIndex(-1), Prev(nullptr), Next(nullptr)
+	{}
+	const FVector Location;
+	int PolygonIndex;
+	PolyNode* Prev;
+	PolyNode* Next;
+};
+
 // edges are between adjacent vertices; index Num() - 1 connects to 0; Every polygon is a stepping stone
 // between a triangle that was intersected and a new set of triangles with no intersections.
 struct Polygon {
-	Polygon(int _TriIndex)
-		: TriIndex(_TriIndex), Mode(SUBTRACT) // guilty until proven innocent :(
+	Polygon(int _TriIndex) :
+		TriIndex(_TriIndex),
+		Mode(SUBTRACT), // guilty until proven innocent :(
+		Normal(nullptr)
 	{}
 
-	TArray<FVector> Vertices;
+	TArray<PolyNode> Vertices;
 	int TriIndex;
 	enum POLYGON_MODE {SUBTRACT, ADD} Mode;
 	FVector* Normal;
@@ -52,8 +64,10 @@ struct PolyEdge {
 	TArray<float> TrDropDistances; // distances from A (toward B) marking where this edge passes in and out of other meshes
 };
 
-struct PolyNode {
-	PolyNode(const FVector& _Location) :
+
+
+struct UPolyNode {
+	UPolyNode(const FVector& _Location) :
 		Location(_Location)
 	{}
 	const FVector Location;
