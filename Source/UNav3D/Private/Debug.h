@@ -9,6 +9,7 @@ struct UNavMesh;
 class TriGrid;
 
 #define UNAV_DBG
+#define UNAV_DEV
 #define DBG_DRAW_TIME 30.0f
 
 namespace UNavDbg {
@@ -17,11 +18,11 @@ namespace UNavDbg {
 
 	void PrintTriMeshMulti(const TArray<TriMesh>& TMeshes);
 
-	void DrawTriMeshBoundingBox(UWorld* World, const TriMesh& TMesh);
+	void DrawTriMeshBoundingBox(const UWorld* World, const TriMesh& TMesh);
 
-	void DrawTriMeshBoundingBoxMulti(UWorld* World, const TArray<TriMesh>& TMeshes);
+	void DrawTriMeshBoundingBoxMulti(const UWorld* World, const TArray<TriMesh>& TMeshes);
 
-	void DrawBoundingBox(UWorld* World, const BoundingBox& BBox);
+	void DrawBoundingBox(const UWorld* World, const BoundingBox& BBox);
 
 	void DrawTriMeshVertices(const UWorld* World, const TriMesh& TMesh);
 	
@@ -48,4 +49,12 @@ namespace UNavDbg {
 	void DrawTris(const UWorld* World, const TArray<Tri>& Tris, FColor Color=FColor::Red);
 
 	void DrawPolygons(const UWorld* World, const TArray<Polygon>& Polygons, FColor Color=FColor::Magenta);
+
+	void PrintTri(const Tri& T);
+
+	bool DoesTriMatchVertexCaptures(const Tri& T);
+
+	void SaveLine(const FVector& A, const FVector& B);
+
+	void DrawSavedLines(const UWorld* World);
 }

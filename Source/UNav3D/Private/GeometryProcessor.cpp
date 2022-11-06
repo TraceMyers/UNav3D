@@ -517,6 +517,7 @@ void GeometryProcessor::BuildPolygonsFromTri(
 	}
 	for (int m = 0; m < NodeCt; m++) {
 		if (PolygonNodes[m].Edges.Num() % 2 == 1) {
+			
 			Data::FailureCaseTris.Add(T);
 			T.MarkForCull();
 			return;

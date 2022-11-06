@@ -31,10 +31,6 @@ public:
 
 	TriMesh* GetTriMesh() const;
 
-#ifdef UNAV_BNDVOL_DBG
-	const FVector* GetVertices() const;
-#endif
-
 	UPROPERTY()
 	UStaticMeshComponent* BoundsMesh;
 	UPROPERTY(BlueprintReadWrite, VisibleDefaultsOnly)

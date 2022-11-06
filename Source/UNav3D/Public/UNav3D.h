@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "GeometryProcessor.h"
+#include "Debug.h"
 
 // TODO: UNav3D should have no private includes
 // NOTE: vertices that are too close together will likely break this plugin
@@ -43,7 +44,13 @@ private:
 	// Takes meshes found inside bounds volume and populates TriMeshes with their data
 	bool PopulateTriMeshes(TArray<TriMesh>& TriMeshes) const;
 
+	// Advance the progress bar
 	void EnterProgressFrame(FScopedSlowTask& Task, const char* msg) const;
+
+#ifdef UNAV_DEV
+	// Sets the bounds volumes of all vertex captures in the world and adds them to the TArray in Data
+	void InitVertexCaptures(const UWorld* World) const;
+#endif
 	
 	TSharedPtr<FUICommandList> PluginCommands;
 	GeometryProcessor GeomProcessor;
@@ -52,6 +59,5 @@ private:
 	const int TotalTasks = 2;
 	
 };
-
 
 #undef LOCTEXT_NAMESPACE

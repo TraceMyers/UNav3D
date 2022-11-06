@@ -1,8 +1,10 @@
 ﻿#pragma once
+
 #include "UNavMesh.h"
 #include "TriMesh.h"
 #include "Polygon.h"
 #include "UNav3DBoundsVolume.h"
+#include "VertexCapture.h"
 
 namespace Data {
 	TArray<UNavMesh> NMeshes;
@@ -12,4 +14,6 @@ namespace Data {
 	TArray<Tri> CulledTris;
 	AUNav3DBoundsVolume* BoundsVolume;
 	TriMesh BoundsVolumeTMesh;
+	TArray<AVertexCapture*> VertexCaptures;
+	
 }

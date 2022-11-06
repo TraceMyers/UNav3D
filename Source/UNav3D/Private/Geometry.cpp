@@ -1,5 +1,6 @@
 ﻿#include "Geometry.h"
 #include "Data.h"
+#include "Debug.h"
 #include "TriMesh.h"
 #include "Tri.h"
 #include "Polygon.h"
@@ -10,7 +11,7 @@
 namespace Geometry {
 	
 	static constexpr float ONE_THIRD = 1.0f / 3.0f;
-	static constexpr float NEAR_EPSILON = 3e-2f;
+	static constexpr float NEAR_EPSILON = 1e-1f;
 
 	// -----------------------------------------------------------------------------------------------------------------
 	// -------------------------------------------------------------------------------------------------------- Internal
@@ -174,35 +175,6 @@ namespace Geometry {
 				}
 			}
 			Internal_SetBBoxAfterVertices(BBox);
-		}
-
-		// If the points were all on a line, you would only need to check magnitude; implicit scaling by cos(theta) in
-		// dot product does the work of checking in 3 dimensions
-		// Ref: https://math.stackexchange.com/questions/1472049/check-if-a-point-is-inside-a-rectangular-shaped-area-3d
-		bool Internal_IsPointInsideBox(const BoundingBox& BBox, const FVector& Point) {
-			const FVector V = Point - BBox.Vertices[0];
-			float SideCheck = FVector::DotProduct(V, BBox.OverlapCheckVectors[0]);
-			if (SideCheck <= 0.0f) {
-				return false;
-			}
-			if (SideCheck >= BBox.OverlapCheckSqMags[0]) {
-				return false;
-			}
-			SideCheck = FVector::DotProduct(V, BBox.OverlapCheckVectors[1]);
-			if (SideCheck <= 0.0f) {
-				return false;
-			}
-			if (SideCheck >= BBox.OverlapCheckSqMags[1]) {
-				return false;
-			}
-			SideCheck = FVector::DotProduct(V, BBox.OverlapCheckVectors[2]);
-			if (SideCheck <= 0.0f) {
-				return false;
-			}
-			if (SideCheck >= BBox.OverlapCheckSqMags[2]) {
-				return false;
-			}
-			return true;
 		}
 
 		// Does NOT require assumption that P has been projected onto T's plane
@@ -505,12 +477,12 @@ namespace Geometry {
 			float BBoxDiagDistance,
 			MeshHitCounter& MHitCtr
 		) {
-			const FVector StartDir = (A - B).GetUnsafeNormal();	
+			const FVector StartDir = (A - B).GetUnsafeNormal();
 			const FVector TrStart = A + StartDir * BBoxDiagDistance;
 			TArray<MeshHit> MHits;
 			// trace both directions, from outside the box to B and vice-versa, getting overlaps
 			Internal_LineTraceThrough(TrStart, B, OtherMeshes, MHits);
-
+			
 			// sort by distance
 			MHits.Sort(MeshHit::DistCmp);
 
@@ -591,6 +563,7 @@ namespace Geometry {
 		}
 
 		// if exists, find an intersection between tris, add PolyEdge to both polys
+		// NOTE: NOT using flags! (since they're currently unused)
 		bool Internal_GetTriPairPolyEdge(
 			const Tri& T0,
 			const Tri& T1,
@@ -599,72 +572,63 @@ namespace Geometry {
 		) {
 			
 			FVector PointOfIntersection;
-			FVector TruePOI[2][2];
-			int T0HitCt = 0;
-			int T1HitCt = 0;
+			FVector TruePOI[2];
+			int HitCt = 0;
 			uint16 TriEdgeFlags = 0x0;
 			float HitDistance;
 			
 			if (Internal_TriLineTrace(T0.A, T0.B, T1, PointOfIntersection, HitDistance)) {
-				TruePOI[0][T0HitCt++] = PointOfIntersection;
-				TriEdgeFlags |= PolyEdge::ON_EDGE_AB;
+				TruePOI[HitCt] = PointOfIntersection;
+				++HitCt;
 			}
 			if (Internal_TriLineTrace(T0.B, T0.C, T1, PointOfIntersection, HitDistance)) {
-				TruePOI[0][T0HitCt++] = PointOfIntersection;
-				TriEdgeFlags |= PolyEdge::ON_EDGE_BC;
+				TruePOI[HitCt] = PointOfIntersection;
+				if (++HitCt == 2) {
+					goto HIT_CT_2;
+				}
 			}
-			if (T0HitCt < 2) {
-				if (Internal_TriLineTrace(T0.C, T0.A, T1, PointOfIntersection, HitDistance)) {
-					TruePOI[0][T0HitCt++] = PointOfIntersection;	
-					TriEdgeFlags |= PolyEdge::ON_EDGE_CA;
+			if (Internal_TriLineTrace(T0.C, T0.A, T1, PointOfIntersection, HitDistance)) {
+				TruePOI[HitCt] = PointOfIntersection;
+				if (++HitCt == 2) {
+					goto HIT_CT_2;
 				}
-				if(T0HitCt < 2 && Internal_TriLineTrace(T1.A, T1.B, T0, PointOfIntersection, HitDistance)) {
-					TruePOI[1][T1HitCt++] = PointOfIntersection;
-					TriEdgeFlags |= PolyEdge::OTHER_ON_EDGE_AB;
-				}
-				if(T0HitCt + T1HitCt < 2 && Internal_TriLineTrace(T1.B, T1.C, T0, PointOfIntersection, HitDistance)) {
-					TruePOI[1][T1HitCt++] = PointOfIntersection;	
-					TriEdgeFlags |= PolyEdge::OTHER_ON_EDGE_BC;
-				}
-				if(T0HitCt + T1HitCt < 2 && Internal_TriLineTrace(T1.C, T1.A, T0, PointOfIntersection, HitDistance)) {
-					TruePOI[1][T1HitCt++] = PointOfIntersection;	
-					TriEdgeFlags |= PolyEdge::OTHER_ON_EDGE_CA;
-				}	
 			}
+			if(Internal_TriLineTrace(T1.A, T1.B, T0, PointOfIntersection, HitDistance)) {
+				TruePOI[HitCt] = PointOfIntersection;
+				if (++HitCt == 2) {
+					goto HIT_CT_2;
+				}
+			}
+			if(Internal_TriLineTrace(T1.B, T1.C, T0, PointOfIntersection, HitDistance)) {
+				TruePOI[HitCt] = PointOfIntersection;
+				if (++HitCt == 2) {
+					goto HIT_CT_2;
+				}
+			}
+			if(Internal_TriLineTrace(T1.C, T1.A, T0, PointOfIntersection, HitDistance)) {
+				TruePOI[HitCt] = PointOfIntersection;
+				if (++HitCt == 2) {
+					goto HIT_CT_2;
+				}
+			}
+			return false;
 
 			// triangles can intersect each other in 3 ways:
 			// - one of T0's edges intersects T1's center and one of T1's edges intersects T0's center
 			// - two of T0's edges intersect T1's center
 			// - two of T1's edges intersect T0's center
-			if (T0HitCt == 1 && T1HitCt == 1) {
-				// could be using refs here, so polyedge could just store refs
-				PolyEdge P(TruePOI[0][0], TruePOI[1][0], TriEdgeFlags);
-				PolyA.Edges.Add(P);
-				P.FlipTriEdgeFlags();	
-				PolyB.Edges.Add(P);
-				return true;
-			}
-			if (T0HitCt == 2 && T1HitCt == 0) {
-				PolyEdge P(TruePOI[0][0], TruePOI[0][1], TriEdgeFlags);	
-				PolyA.Edges.Add(P);
-				P.FlipTriEdgeFlags();	
-				PolyB.Edges.Add(P);
-				return true;
-			}
-			if (T1HitCt == 2 && T0HitCt == 0) {
-				PolyEdge P(TruePOI[1][0], TruePOI[1][1], TriEdgeFlags);	
-				PolyA.Edges.Add(P);
-				P.FlipTriEdgeFlags();	
-				PolyB.Edges.Add(P);
-				return true;
-			}
-			return false;
+			HIT_CT_2:
+			// could be using refs here, so polyedge could just store refs
+			const PolyEdge P(TruePOI[0], TruePOI[1], TriEdgeFlags);
+			PolyA.Edges.Add(P);
+			PolyB.Edges.Add(P);
+			return true;
 		}
 
 		// finds intersections between triangles on meshes, creating PolyEdges for use in building polygons
 		void Internal_FindPolyEdges(
-			TriMesh& TMeshA,
-			TriMesh& TMeshB,
+			const TriMesh& TMeshA,
+			const TriMesh& TMeshB,
 			const TArray<TriMesh*>& OtherMeshes,
 			TArray<UnstructuredPolygon>& UPolysA,
 			TArray<UnstructuredPolygon>& UPolysB,
@@ -690,6 +654,7 @@ namespace Geometry {
 					const float DistSq = FVector::DistSquared(T0.A, T1.A);
 					// if it's even possible they could intersect...
 					if (DistSq <= T0.LongestSidelenSq + T1.LongestSidelenSq) {
+
 						UnstructuredPolygon& PolyB = UPolysB[j];
 						
 						// if an intersection between these triangles exists, put it in both polys
@@ -860,15 +825,44 @@ namespace Geometry {
 		GetGroupExtrema(Group, Min, Max);
 		Internal_SetBoundingBoxFromExtrema(NMesh.Box, Min, Max);	
 	}
+	
+	// If the points were all on a line, you would only need to check magnitude; implicit scaling by cos(theta) in
+	// dot product does the work of checking in 3 dimensions
+	// Ref: https://math.stackexchange.com/questions/1472049/check-if-a-point-is-inside-a-rectangular-shaped-area-3d
+	bool IsPointInsideBox(const BoundingBox& BBox, const FVector& Point) {
+		const FVector V = Point - BBox.Vertices[0];
+		float SideCheck = FVector::DotProduct(V, BBox.OverlapCheckVectors[0]);
+		if (SideCheck <= 0.0f) {
+			return false;
+		}
+		if (SideCheck >= BBox.OverlapCheckSqMags[0]) {
+			return false;
+		}
+		SideCheck = FVector::DotProduct(V, BBox.OverlapCheckVectors[1]);
+		if (SideCheck <= 0.0f) {
+			return false;
+		}
+		if (SideCheck >= BBox.OverlapCheckSqMags[1]) {
+			return false;
+		}
+		SideCheck = FVector::DotProduct(V, BBox.OverlapCheckVectors[2]);
+		if (SideCheck <= 0.0f) {
+			return false;
+		}
+		if (SideCheck >= BBox.OverlapCheckSqMags[2]) {
+			return false;
+		}
+		return true;
+	}
 
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB) {
 		for (int i = 0; i < BoundingBox::VERTEX_CT; i++) {
-			if (Internal_IsPointInsideBox(BBoxA, BBoxB.Vertices[i])) {
+			if (IsPointInsideBox(BBoxA, BBoxB.Vertices[i])) {
 				return true;
 			}
 		}
 		for (int i = 0; i < BoundingBox::VERTEX_CT; i++) {
-			if (Internal_IsPointInsideBox(BBoxB, BBoxA.Vertices[i])) {
+			if (IsPointInsideBox(BBoxB, BBoxA.Vertices[i])) {
 				return true;
 			}
 		}
@@ -877,7 +871,7 @@ namespace Geometry {
 
 	bool IsBoxAInBoxB(const BoundingBox& BBoxA, const BoundingBox& BBoxB) {
 		for (int i = 0; i < BoundingBox::VERTEX_CT; i++) {
-			if (!Internal_IsPointInsideBox(BBoxB, BBoxA.Vertices[i])) {
+			if (!IsPointInsideBox(BBoxB, BBoxA.Vertices[i])) {
 				return false;
 			}
 		}
@@ -984,9 +978,9 @@ namespace Geometry {
 		for (int i = 0; i < Grid.Num(); i++) {
 			Tri& T = Grid[i];
 			if (
-				!Internal_IsPointInsideBox(BBox, T.A)
-				&& !Internal_IsPointInsideBox(BBox, T.B)
-				&& !Internal_IsPointInsideBox(BBox,T.C)
+				!IsPointInsideBox(BBox, T.A)
+				&& !IsPointInsideBox(BBox, T.B)
+				&& !IsPointInsideBox(BBox,T.C)
 			) {
 				T.MarkForCull();	
 			}	
@@ -1043,6 +1037,45 @@ namespace Geometry {
 			Tri::GetArea(P, A, B) + Tri::GetArea(P, B, C) + Tri::GetArea(P, C, A)
 			<= Tri::GetArea(A, B, C) + NEAR_EPSILON
 		);
+	}
+
+	bool DoesTriHaveSimilarVectors(const Tri& T, const FVector& A, const FVector& B, const FVector& C) {
+		constexpr float Epsilon = 1000.0f;
+		if (
+			(
+				FVector::DistSquared(T.A, A) <= Epsilon
+				&& FVector::DistSquared(T.B, B) <= Epsilon
+				&& FVector::DistSquared(T.C, C) <= Epsilon
+			)
+			|| (
+				FVector::DistSquared(T.A, A) <= Epsilon
+				&& FVector::DistSquared(T.B, C) <= Epsilon
+				&& FVector::DistSquared(T.C, B) <= Epsilon
+			)
+			|| (
+				FVector::DistSquared(T.A, B) <= Epsilon
+				&& FVector::DistSquared(T.B, A) <= Epsilon
+				&& FVector::DistSquared(T.C, C) <= Epsilon
+			)
+			|| (
+				FVector::DistSquared(T.A, B) <= Epsilon
+				&& FVector::DistSquared(T.B, C) <= Epsilon
+				&& FVector::DistSquared(T.C, A) <= Epsilon
+			)
+			|| (
+				FVector::DistSquared(T.A, C) <= Epsilon
+				&& FVector::DistSquared(T.B, A) <= Epsilon
+				&& FVector::DistSquared(T.C, B) <= Epsilon
+			)
+			|| (
+				FVector::DistSquared(T.A, C) <= Epsilon
+				&& FVector::DistSquared(T.B, B) <= Epsilon
+				&& FVector::DistSquared(T.C, A) <= Epsilon
+			)
+		) {
+			return true;
+		}
+		return false;
 	}
 
 	bool IsEar(const PolyNode& P) {

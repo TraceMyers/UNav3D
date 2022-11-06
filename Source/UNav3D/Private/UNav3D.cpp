@@ -85,6 +85,12 @@ void FUNav3DModule::PluginButtonClicked(){
 		return;
 	}
 
+#ifdef UNAV_DEV
+	// vertex captures are placed in the world so triangles with matching vertices can be stopped on in debugging
+	// this initialized them
+	InitVertexCaptures(World);	
+#endif
+	
 	// starting up progress bar
 	FScopedSlowTask Task(
 		TotalTasks, LOCTEXT("Unav3D", "UNav3D working on...")
@@ -99,7 +105,9 @@ void FUNav3DModule::PluginButtonClicked(){
 	EnterProgressFrame(Task, "creating nav meshes");
 	GeomProcessor.PopulateNavMeshes(Data::TMeshes, Data::NMeshes);
 
-	printf("end\n");
+#ifdef UNAV_DBG
+	UNavDbg::DrawSavedLines(World);
+#endif
 }
 
 void FUNav3DModule::RegisterMenus() {
@@ -180,7 +188,6 @@ bool FUNav3DModule::PopulateTriMeshes(TArray<TriMesh>& TMeshes) const {
 
 #ifdef UNAV_DBG
 		UNavDbg::PrintTriMesh(TMesh);
-		// UNavDbg::DrawTriMeshBoundingBox(World, TMesh);
 #endif
 		
 	}
@@ -194,6 +201,22 @@ void FUNav3DModule::EnterProgressFrame(FScopedSlowTask& Task, const char* msg) c
 		FText::Format(LOCTEXT("UNav3D", "UNav3D working on... {0}"), FText::FromString(msg))
 	);
 }
+
+#ifdef UNAV_DEV
+void FUNav3DModule::InitVertexCaptures(const UWorld* World) const {
+	TArray<AActor*> VertexCaptures;
+	UGameplayStatics::GetAllActorsOfClass(World, AVertexCapture::StaticClass(), VertexCaptures);
+	Data::VertexCaptures.Empty();
+	for (const auto VCA : VertexCaptures) {
+		AVertexCapture* VC = Cast<AVertexCapture>(VCA);
+		if (VC != nullptr) {
+			Geometry::SetBoundingBox(VC->GetBBox(), VC);
+			UNavDbg::DrawBoundingBox(World, VC->GetBBox());
+			Data::VertexCaptures.Add(VC);
+		}
+	}
+}
+#endif
 
 #undef LOCTEXT_NAMESPACE
 

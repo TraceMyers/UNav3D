@@ -34,6 +34,7 @@ void UNavUI::PostLoad() {
 		}
 		
 		Draw = Cast<ADraw>(World->SpawnActor(ADraw::StaticClass()));
+		Draw->SetFolderPath("/UNav3D");
 	}
 }
 

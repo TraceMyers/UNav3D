@@ -3,6 +3,8 @@
 #include "Engine/StaticMeshActor.h"
 #include "Kismet/GameplayStatics.h"
 #include "Data.h"
+#include "Debug.h"
+#include "VertexCapture.h"
 
 AUNav3DBoundsVolume::AUNav3DBoundsVolume() {
 	PrimaryActorTick.bCanEverTick = false;
@@ -53,6 +55,12 @@ void AUNav3DBoundsVolume::GetOverlappingMeshes(TArray<TriMesh>& Meshes) {
 		if (FoundMesh == nullptr) {
 			continue;
 		}
+#ifdef UNAV_DEV
+		const AVertexCapture* VertexCapture = Cast<AVertexCapture>(FoundMesh);
+		if (VertexCapture != nullptr) {
+			continue;
+		}
+#endif
 		const UStaticMeshComponent* MeshCmp = FoundMesh->GetStaticMeshComponent();
 		if (MeshCmp == nullptr || MeshCmp == BoundsMesh) {
 			continue;
@@ -89,9 +97,3 @@ const BoundingBox& AUNav3DBoundsVolume::GetBBox() const {
 TriMesh* AUNav3DBoundsVolume::GetTriMesh() const {
 	return TMesh;
 }
-
-#ifdef UNAV_BNDVOL_DBG
-const FVector* AUNav3DBoundsVolume::GetVertices() const {
-	return OverlapBBox.Vertices;
-}
-#endif

@@ -30,6 +30,9 @@ namespace Geometry {
 	// Populates a BoundingBox from a UNavMesh
 	void SetBoundingBox(UNavMesh& NMesh, const TArray<TriMesh*> Group);
 
+	// Checks if the point lies inside the bounding box
+	bool IsPointInsideBox(const BoundingBox& BBox, const FVector& Point);
+
 	// Checks whether or not the two bounding boxes overlap. Seemingly necessary to do this on our own for editor plugin.
 	bool DoBoundingBoxesOverlap(const BoundingBox& BBoxA, const BoundingBox& BBoxB);
 
@@ -62,11 +65,14 @@ namespace Geometry {
 	// Does P (roughly) lie on/inside Triangle ABC?
 	bool DoesPointTouchTri(const FVector& A, const FVector& B, const FVector& C, const FVector& P);
 
+	// Do A, B, C come close to T.X, T.Y, T.Z in any order? Useful for finding a specific tri and debugging it
+	bool DoesTriHaveSimilarVectors(const Tri& T, const FVector& A, const FVector& B, const FVector& C);
+
 	// Tests if P.Prev, P and P.Next make a triangle that contains no other points in the polygon
 	// polygon must have >= 4 vertices
 	bool IsEar(const PolyNode& P);
 
-	// Given an ordered set of vertices a, b, c, d of a simple polygon, regardless of polygon orientation (cw or ccw),
+	// Given an ordered set of vertices a, b, c, d of a polygon, regardless of polygon orientation (cw or ccw),
 	// and given the type of vertex b is known, the type of vertex c can be determined. if b,c,d make an interior
 	// angle of the polygon, this returns VERTEX_INTERIOR, else VERTEX_EXTERIOR.
 	// The normal can be up or down facing - it doesn't matter. W = -(b-a), V = c-b, U = d-c, PrevType = type of b.

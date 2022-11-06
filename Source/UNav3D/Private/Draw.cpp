@@ -28,8 +28,7 @@ ADraw::ADraw() {
 	static const TCHAR* TriMatPath = TEXT("/UNav3D/Internal/M_Triangle.M_Triangle");
 	TriMaterial = LoadMaterial(TriMatPath);
 	
-	// TODO: Investigate - crashed on this when adding unav3dmovementcomponent to src from editor
-	SetFolderPath("/UNav3D");
+	
 }
 
 void ADraw::Init() {

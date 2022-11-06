@@ -9,6 +9,11 @@
 #include "Polygon.h"
 #include "UNavMesh.h"
 
+namespace {
+	TArray<FVector> LineA;
+	TArray<FVector> LineB;
+}
+
 void UNavDbg::PrintTriMesh(const TriMesh& TMesh) {
 	printf(
 		"Bounds Volume found Mesh %s with %d vertices and %d tris.\n", 
@@ -23,10 +28,10 @@ void UNavDbg::PrintTriMeshMulti(const TArray<TriMesh>& TMeshes) {
 	}  
 }
 
-void UNavDbg::DrawTriMeshBoundingBox(UWorld* World, const TriMesh& TMesh) {
-	for (int j = 0; j < BoundingBox::VERTEX_CT; j++) { 
-		ADebugMarker::Spawn(World, TMesh.Box.Vertices[j], DBG_DRAW_TIME);
-	} 
+void UNavDbg::DrawTriMeshBoundingBox(const UWorld* World, const TriMesh& TMesh) {
+	// for (int j = 0; j < BoundingBox::VERTEX_CT; j++) { 
+	// 	ADebugMarker::Spawn(World, TMesh.Box.Vertices[j], DBG_DRAW_TIME);
+	// } 
 	constexpr int StartIndices [4] {0, 4, 5, 6};  
 	constexpr int EndIndices [4][3] {{1, 2, 3}, {1, 2, 7}, {1, 3, 7}, {2, 3, 7}};  
 	const FVector* Vertices = TMesh.Box.Vertices;  
@@ -46,17 +51,17 @@ void UNavDbg::DrawTriMeshBoundingBox(UWorld* World, const TriMesh& TMesh) {
 	}
 }
 
-void UNavDbg::DrawTriMeshBoundingBoxMulti(UWorld* World, const TArray<TriMesh>& TMeshes) {
+void UNavDbg::DrawTriMeshBoundingBoxMulti(const UWorld* World, const TArray<TriMesh>& TMeshes) {
 	for (int i = 0; i < TMeshes.Num(); i++) {
 		const TriMesh& TMesh = TMeshes[i];
 		DrawTriMeshBoundingBox(World, TMesh);
 	}  
 }
 
-void UNavDbg::DrawBoundingBox(UWorld* World, const BoundingBox& BBox) {
-	for (int j = 0; j < BoundingBox::VERTEX_CT; j++) { 
-		ADebugMarker::Spawn(World, BBox.Vertices[j], DBG_DRAW_TIME);
-	} 
+void UNavDbg::DrawBoundingBox(const UWorld* World, const BoundingBox& BBox) {
+	// for (int j = 0; j < BoundingBox::VERTEX_CT; j++) { 
+	// 	ADebugMarker::Spawn(World, BBox.Vertices[j], DBG_DRAW_TIME);
+	// } 
 	constexpr int StartIndices [4] {0, 4, 5, 6};  
 	constexpr int EndIndices [4][3] {{1, 2, 3}, {1, 2, 7}, {1, 3, 7}, {2, 3, 7}};  
 	const FVector* Vertices = BBox.Vertices;  
@@ -194,4 +199,43 @@ void UNavDbg::DrawPolygons(const UWorld* World, const TArray<Polygon>& Polygons,
 	for (auto& Polygon : Polygons) {
 		DrawPolygon(World, Polygon);
 	}	
+}
+
+void UNavDbg::PrintTri(const Tri& T) {
+	printf("...\nTri:\nA.X: %2.f, A.Y: %.2f, A.Z: %.2f\n", T.A.X, T.A.Y, T.A.Z);
+	printf("B.X: %2.f, B.Y: %.2f, B.Z: %.2f\n", T.B.X, T.B.Y, T.B.Z);
+	printf("C.X: %2.f, C.Y: %.2f, C.Z: %.2f\n...\n", T.C.X, T.C.Y, T.C.Z);
+}
+
+bool UNavDbg::DoesTriMatchVertexCaptures(const Tri& T) {
+	int InsideCt = 0;
+	for (const auto& VC : Data::VertexCaptures) {
+		if (Geometry::IsPointInsideBox(VC->GetBBox(), T.A)) {
+			if (++InsideCt == 3) {
+				return true;
+			}
+		}
+		else if (Geometry::IsPointInsideBox(VC->GetBBox(), T.B)) {
+			if (++InsideCt == 3) {
+				return true;
+			}
+		}
+		else if (Geometry::IsPointInsideBox(VC->GetBBox(), T.C)) {
+			if (++InsideCt == 3) {
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+void UNavDbg::SaveLine(const FVector& A, const FVector& B) {
+	LineA.Add(A);
+	LineB.Add(B);
+}
+
+void UNavDbg::DrawSavedLines(const UWorld* World) {
+	for (int i = 0; i < LineA.Num(); i++) {
+		DrawDebugLine(World, LineA[i], LineB[i], FColor::Blue, false, DBG_DRAW_TIME, 0, 1.0f);
+	}
 }
