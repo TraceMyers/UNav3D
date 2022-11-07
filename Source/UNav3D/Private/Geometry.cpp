@@ -179,14 +179,28 @@ namespace Geometry {
 			Internal_SetBBoxAfterVertices(BBox);
 		}
 
+		FVector Internal_UnitNormal(const FVector& A, const FVector& B, const FVector& C) {
+			return FVector::CrossProduct(B - A, C - B).GetUnsafeNormal();
+		}
+
 		// Does NOT require assumption that P has been projected onto T's plane
 		// clever trick: assume the pt is inside the triangle. then, the pt makes three triangles - one with every pair
 		// of tri vertices. the sum of those areas is equal to the area of the triangle.
 		bool Internal_DoesPointTouchTri(const Tri& T, const FVector& P) {
-			return (
-				Tri::GetArea(P, T.A, T.B) + Tri::GetArea(P, T.B, T.C) + Tri::GetArea(P, T.C, T.A)
-				<= T.Area * NEAR_FACTOR
-			);
+			// return (
+			// 	Tri::GetArea(P, T.A, T.B) + Tri::GetArea(P, T.B, T.C) + Tri::GetArea(P, T.C, T.A)
+			// 	<= T.Area * NEAR_FACTOR
+			// );
+			const FVector N1 = Internal_UnitNormal(T.A, T.B, P);	
+			const FVector N2 = Internal_UnitNormal(T.B, T.C, P);
+			if (FVector::DotProduct(N1, N2) < 1.0f - 1e-2f) {
+				return false;
+			}
+			const FVector N3 = Internal_UnitNormal(T.C, T.A, P);
+			if (FVector::DotProduct(N2, N3) < 1.0f - 1e-2f) {
+				return false;
+			}
+			return true;
 		}
 
 		// does point touch this rectangular face? assumes pt has been projected onto plane with vertices.

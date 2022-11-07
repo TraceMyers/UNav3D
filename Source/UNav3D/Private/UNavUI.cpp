@@ -7,9 +7,7 @@
 
 // TODO: find ADraw at open and delete
 
-UNavUI::UNavUI() {
-	
-}
+UNavUI::UNavUI() {}
 
 UNavUI::~UNavUI() {}
 
@@ -42,13 +40,14 @@ void UNavUI::HideAndShowAllStaticMeshes() {
 	if (Data::NMeshes.Num() > 0) {
 		// doing it this way both because meshes will be individually selectable for visibility
 		// later and it's the easiest way to get at least one mesh to flip visibility on the first click.
-		bool MeshVisibilityFlip;
+		bool MeshVisibilityFlip = true;
 		bool FoundMesh = false;
 		for (auto& NMesh : Data::NMeshes) {
 			auto& MeshActors = NMesh.MeshActors;
 			if(MeshActors.Num() > 0) {
-				MeshVisibilityFlip = MeshActors[0]->GetStaticMeshComponent()->GetVisibleFlag();
+				MeshVisibilityFlip = !MeshActors[0]->GetStaticMeshComponent()->GetVisibleFlag();
 				FoundMesh = true;
+				break;
 			}
 		}
 		if (!FoundMesh) {

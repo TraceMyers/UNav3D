@@ -732,7 +732,8 @@ void GeometryProcessor::CreateNewTriData(
 				PolyNode* Next = WalkNode->Next;
 				const int PrevIndex = Prev->PolygonIndex;
 				const int NextIndex = Next->PolygonIndex;
-				
+
+				// TODO: turn this back into a function that rearranges vertices if bad normal (undone with hard reset :()
 				TempTriVertexIndices.Add(FIntVector(
 					PrevIndex + AddVerticesOffset,
 					CurIndex + AddVerticesOffset,
