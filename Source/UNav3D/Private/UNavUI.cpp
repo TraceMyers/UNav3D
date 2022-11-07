@@ -42,10 +42,21 @@ void UNavUI::HideAndShowAllStaticMeshes() {
 	if (Data::NMeshes.Num() > 0) {
 		// doing it this way both because meshes will be individually selectable for visibility
 		// later and it's the easiest way to get at least one mesh to flip visibility on the first click.
-		const bool Mesh0VisibilityFlip = !Data::NMeshes[0].MeshActors[0]->GetStaticMeshComponent()->GetVisibleFlag();
+		bool MeshVisibilityFlip;
+		bool FoundMesh = false;
+		for (auto& NMesh : Data::NMeshes) {
+			auto& MeshActors = NMesh.MeshActors;
+			if(MeshActors.Num() > 0) {
+				MeshVisibilityFlip = MeshActors[0]->GetStaticMeshComponent()->GetVisibleFlag();
+				FoundMesh = true;
+			}
+		}
+		if (!FoundMesh) {
+			return;
+		}
 		for (auto& NMesh : Data::NMeshes) {
 			for (const auto& MeshActor : NMesh.MeshActors) {
-				MeshActor->GetStaticMeshComponent()->SetVisibility(Mesh0VisibilityFlip);
+				MeshActor->GetStaticMeshComponent()->SetVisibility(MeshVisibilityFlip);
 			}
 		}
 	}
