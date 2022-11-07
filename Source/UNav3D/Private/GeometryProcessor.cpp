@@ -257,7 +257,6 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 	TArray<TArray<TArray<Polygon>>>& AllPolygons
 ) {
 	auto& Grid = Data::BoundsVolumeTMesh.Grid;
-	printf("bv tmesh num: %d\n", Grid.Num());
 	for (int i = 0; i < Grid.Num(); i++) {
 		Grid[i].Normal = -Grid[i].Normal;
 	}
@@ -292,9 +291,7 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 			
 			for (int k = 0; k < MeshUPolys.Num(); k++) {
 				Tri& T = TMesh.Grid[k];
-				if (UNavDbg::DoesTriMatchVertexCaptures(T)) {
-					printf("breaking news: this sucks!\n");
-				}
+				
 				if (T.IsTriCull()) {
 					// Tris are marked for cull early if they fall outside of the bounds box
 					continue;
@@ -369,10 +366,6 @@ void GeometryProcessor::FormMeshesFromGroups(
 		TArray<TArray<Polygon>>& GroupPolygons = Polygons[i];
 		TArray<FVector*> Normals;
 		for (int j = 0; j < GroupPolygons.Num(); j++) {
-			auto& TMesh = Group[j];
-			if (strcmp(TCHAR_TO_ANSI(*TMesh->MeshActor->GetName()), "DebugMarkerMesh2_2") == 0) {
-				printf("hello\n");
-			}
 			auto& MeshPolygons = GroupPolygons[j];
 			CreateNewTriData(MeshPolygons, NewVertices, NewTriVertexIndices, Normals);
 		}
@@ -428,14 +421,7 @@ void GeometryProcessor::FormMeshesFromGroups(
 
 void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<UPolyNode>& PolygonNodes) {
 	const TArray<PolyEdge>& Edges = UPoly.Edges;
-	if (UNavDbg::DoesTriMatchVertexCaptures(T)) {
-		for (int i = 0; i < 10; i++) {
-			printf("balllls");
-		}
-		printf("breaking news: this sucks!\n");
-		printf("yes, you there\n");
-		printf("stop\n");
-	}
+	
 	for (int i = 0; i < Edges.Num(); i++) {
 		const PolyEdge& PEdge = Edges[i];
 		const TArray<float> PtDistances = PEdge.TrDropDistances;
@@ -478,12 +464,6 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 				break;
 			}
 		}
-	}
-	if (UPoly.Edges.Num() > 0 && PolygonNodes.Num() == 0) {
-		// Data::FailureCaseTris.Add(T);
-	}
-	if (UPoly.Edges.Num() > 0) {
-		printf("hell\n");
 	}
 }
 
