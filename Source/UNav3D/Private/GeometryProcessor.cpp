@@ -292,6 +292,9 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 			
 			for (int k = 0; k < MeshUPolys.Num(); k++) {
 				Tri& T = TMesh.Grid[k];
+				if (UNavDbg::DoesTriMatchVertexCaptures(T)) {
+					printf("breaking news: this sucks!\n");
+				}
 				if (T.IsTriCull()) {
 					// Tris are marked for cull early if they fall outside of the bounds box
 					continue;
@@ -425,6 +428,14 @@ void GeometryProcessor::FormMeshesFromGroups(
 
 void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<UPolyNode>& PolygonNodes) {
 	const TArray<PolyEdge>& Edges = UPoly.Edges;
+	if (UNavDbg::DoesTriMatchVertexCaptures(T)) {
+		for (int i = 0; i < 10; i++) {
+			printf("balllls");
+		}
+		printf("breaking news: this sucks!\n");
+		printf("yes, you there\n");
+		printf("stop\n");
+	}
 	for (int i = 0; i < Edges.Num(); i++) {
 		const PolyEdge& PEdge = Edges[i];
 		const TArray<float> PtDistances = PEdge.TrDropDistances;
@@ -469,7 +480,10 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 		}
 	}
 	if (UPoly.Edges.Num() > 0 && PolygonNodes.Num() == 0) {
-		Data::FailureCaseTris.Add(T);
+		// Data::FailureCaseTris.Add(T);
+	}
+	if (UPoly.Edges.Num() > 0) {
+		printf("hell\n");
 	}
 }
 
@@ -509,6 +523,7 @@ void GeometryProcessor::BuildPolygonsFromTri(
 	TArray<Polygon>& TMeshPolygons,
 	int TriIndex
 ) {
+	
 	// if no nodes were made or the links aren't made properly, this tri could be a problem child, or it could
 	// simply have intersections but still be fully enclosed in another mesh
 	const int NodeCt = PolygonNodes.Num();
@@ -516,14 +531,14 @@ void GeometryProcessor::BuildPolygonsFromTri(
 		T.MarkForCull();
 		return;
 	}
-	for (int m = 0; m < NodeCt; m++) {
-		if (PolygonNodes[m].Edges.Num() % 2 == 1) {
-			
-			Data::FailureCaseTris.Add(T);
-			T.MarkForCull();
-			return;
-		}
-	}
+	// for (int m = 0; m < NodeCt; m++) {
+	// 	if (PolygonNodes[m].Edges.Num() % 2 == 1) {
+	// 		
+	// 		Data::FailureCaseTris.Add(T);
+	// 		T.MarkForCull();
+	// 		return;
+	// 	}
+	// }
 	// if the tri makes it here, its PolygonNodes array is fairly likely composed of one or more closed
 	// loops that can be used to form polygon(s)
 	for (int StartIndex = 0; StartIndex < NodeCt; ) {
@@ -561,9 +576,14 @@ void GeometryProcessor::BuildPolygonsFromTri(
 
 			// remove the connection both ways
 			EdgeIndices->RemoveAt(0, 1, false);
-			if (EdgeNode.Edges.Num() <= 1 || EdgeNode.Edges.Find(PrevIndex) == -1) {
-				T.MarkForCull();
-				return;
+			if (EdgeNode.Edges.Num() <= 1) {
+				if (EdgeNode.Edges.Find(PrevIndex) != -1) {
+					EdgeNode.Edges.RemoveSingle(PrevIndex);
+				}
+				break;
+			}
+			if (EdgeNode.Edges.Find(PrevIndex) == -1) {
+				break;
 			}
 			EdgeNode.Edges.RemoveSingle(PrevIndex);
 
