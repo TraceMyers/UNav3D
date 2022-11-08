@@ -12,7 +12,8 @@
 namespace Geometry {
 	
 	static constexpr float ONE_THIRD = 1.0f / 3.0f;
-	static constexpr float NEAR_EPSILON = 1e-1f;
+	static constexpr float NEAR_EPSILON = 1e-2f;
+	static constexpr float GLANCE_EPSILON = 1e-4f;
 	static constexpr float NEAR_FACTOR = 1.0f + 1e-4f;
 
 	// -----------------------------------------------------------------------------------------------------------------
@@ -51,8 +52,8 @@ namespace Geometry {
 		};
 
 		struct MeshHit {
-			MeshHit(const AStaticMeshActor* _Mesh, const FVector& _Location, float _Distance) :
-				Mesh{_Mesh}, Location(_Location), Distance(_Distance)
+			MeshHit(const AStaticMeshActor* _Mesh, const FVector& _Location, const FVector & _Normal, float _Distance) :
+				Mesh{_Mesh}, Location(_Location), Normal(_Normal), Distance(_Distance)
 			{}
 			
 			static bool DistCmp(const MeshHit& A, const MeshHit& B) {
@@ -61,6 +62,7 @@ namespace Geometry {
 			
 			const AStaticMeshActor* Mesh;
 			const FVector Location;
+			const FVector Normal;
 			const float Distance;
 		};
 
@@ -440,17 +442,17 @@ namespace Geometry {
 			const float Length = Dir.Size();
 			Dir *= 1 / Length;
 			const FVector OppDir = -Dir;
-			for (TriMesh* TMesh : TriMeshes) {
+			for (const TriMesh* TMesh : TriMeshes) {
 				const AStaticMeshActor* MeshActor = TMesh->MeshActor;
 				const auto& Tris = TMesh->Grid;
 				for (int i = 0; i < Tris.Num(); i++) {
 					const Tri& T = Tris[i];
 					if (Internal_Raycast(TrStart, Dir, Length, T, PointOfIntersection, HitDistance)) {
-						MHits.Add(MeshHit(MeshActor, PointOfIntersection, HitDistance));
+						MHits.Add(MeshHit(MeshActor, PointOfIntersection, T.Normal, HitDistance));
 					}
 					if (Internal_Raycast(TrEnd, OppDir, Length, T, PointOfIntersection, HitDistance)) {
 						HitDistance = TraceDistance - HitDistance;
-						MHits.Add(MeshHit(MeshActor, PointOfIntersection, HitDistance));
+						MHits.Add(MeshHit(MeshActor, PointOfIntersection, T.Normal, HitDistance));
 					}
 				}
 			}
@@ -493,8 +495,8 @@ namespace Geometry {
 			float BBoxDiagDistance,
 			MeshHitCounter& MHitCtr
 		) {
-			const FVector StartDir = (A - B).GetUnsafeNormal();
-			const FVector TrStart = A + StartDir * BBoxDiagDistance;
+			const FVector TrDir = (A - B).GetUnsafeNormal();
+			const FVector TrStart = A + TrDir * BBoxDiagDistance;
 			TArray<MeshHit> MHits;
 			// trace both directions, from outside the box to B and vice-versa, getting overlaps
 			Internal_LineTraceThrough(TrStart, B, OtherMeshes, MHits);
@@ -509,6 +511,7 @@ namespace Geometry {
 			for (int i = 0; i < MHits.Num(); i++) {
 				// iterate over hits from point outside box to B
 				const MeshHit& MHit = MHits[i];
+				
 				if (!PassedA) {
 					if (MHit.Distance > BBoxDiagDistance) {
 						// we've now passed pt A and want to start keeping track of distances
@@ -534,6 +537,9 @@ namespace Geometry {
 						}
 					}
 					else {
+						// skipping glancing hits before the intersection segment
+						// if (FMath::Abs(FVector::DotProduct(MHit.Normal, TrDir)) > GLANCE_EPSILON) {
+						// }
 						MHitCtr.Add(MHit.Mesh);
 					}
 				}
@@ -656,16 +662,16 @@ namespace Geometry {
 			
 			for (int i = 0; i < TrisA.Num(); i++) {
 				const Tri& T0 = TrisA[i];
-				if (T0.IsCull()) {
-					continue;
-				}
+				// if (T0.IsCull()) {
+				// 	continue;
+				// }
 				
 				UnstructuredPolygon& PolyA = UPolysA[i];
 				for (int j = 0; j < TrisB.Num(); j++) {
 					const Tri& T1 = TrisB[j];
-					if (T1.IsCull()) {
-						continue;
-					}
+					// if (T1.IsCull()) {
+					// 	continue;
+					// }
 					
 					// const float DistSq = FVector::DistSquared(T0.A, T1.A);
 					// if (DistSq < 0.5f * (T0.Area * T1.Area)) {
@@ -678,7 +684,7 @@ namespace Geometry {
 							PolyEdge& PolyEdge0 = PolyA.Edges.Last();
 							PolyEdge& PolyEdge1 = PolyB.Edges.Last();
 
-							// UNavDbg::BreakOnVertexCaptureMatch(T0, T1);
+							UNavDbg::BreakOnVertexCaptureMatch(T0, T1);
 							
 							// check where the edge line segment is inside and outside all other meshes to help
 							// with polygon creation

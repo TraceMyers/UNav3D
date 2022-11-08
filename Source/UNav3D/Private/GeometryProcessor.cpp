@@ -291,7 +291,8 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 			
 			for (int k = 0; k < MeshUPolys.Num(); k++) {
 				Tri& T = TMesh.Grid[k];
-				
+
+				// UNavDbg::BreakOnVertexCaptureMatch(T);
 				TArray<UPolyNode> PolygonNodes;
 				if (T.IsCull()) {
 					// Tris are marked for cull early if they fall outside of the bounds box

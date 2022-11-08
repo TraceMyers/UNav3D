@@ -2,7 +2,8 @@
 
 #include "Data.h"
 #include "UNavMesh.h"
-#include "SceneManagement.h"
+
+// TODO: Split mesh into array of meshes so editor viewport can cull
 
 namespace {
 	
@@ -20,15 +21,12 @@ ADraw::ADraw() {
 		PrimaryActorTick.bCanEverTick = false;
 		PrimaryActorTick.bStartWithTickEnabled = false;
 	}
-	// Mesh->bUseAsyncCooking = true;
 
 	NavMeshes = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("NavMeshes"));
 	NavMeshes->SetupAttachment(GetRootComponent());
 	
 	static const TCHAR* TriMatPath = TEXT("/UNav3D/Internal/M_Triangle.M_Triangle");
 	TriMaterial = LoadMaterial(TriMatPath);
-	
-	
 }
 
 void ADraw::Init() {

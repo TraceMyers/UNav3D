@@ -229,11 +229,17 @@ bool UNavDbg::DoesTriMatchVertexCaptures(const Tri& T) {
 	return false;
 }
 
-// void UNavDbg::BreakOnVertexCaptureMatch(const Tri& A, const Tri& B) {
-// 	if (UNavDbg::DoesTriMatchVertexCaptures(A) && UNavDbg::DoesTriMatchVertexCaptures(B)) {
-// 		printf("breaking on vertex capture match\n");
-// 	}
-// }
+void UNavDbg::BreakOnVertexCaptureMatch(const Tri& T) {
+	if (DoesTriMatchVertexCaptures(T)) {
+		printf("breaking on vertex capture match\n");
+	}
+}
+
+void UNavDbg::BreakOnVertexCaptureMatch(const Tri& A, const Tri& B) {
+	if (DoesTriMatchVertexCaptures(A) && DoesTriMatchVertexCaptures(B)) {
+		printf("breaking on vertex capture match\n");
+	}
+}
 
 void UNavDbg::SaveLine(const FVector& A, const FVector& B) {
 	LineA.Add(A);

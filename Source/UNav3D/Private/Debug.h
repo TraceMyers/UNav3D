@@ -54,7 +54,11 @@ namespace UNavDbg {
 
 	bool DoesTriMatchVertexCaptures(const Tri& T);
 	
-	// inline void BreakOnVertexCaptureMatch(const Tri& A, const Tri& B) {
+	// to use this make sure the build configuration is on debug and set a breakpoint inside the function
+	void BreakOnVertexCaptureMatch(const Tri& T);
+	
+	// to use this make sure the build configuration is on debug and set a breakpoint inside the function
+	void BreakOnVertexCaptureMatch(const Tri& A, const Tri& B);
 
 	void SaveLine(const FVector& A, const FVector& B);
 
