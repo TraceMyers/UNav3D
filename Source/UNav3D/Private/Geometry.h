@@ -44,17 +44,22 @@ namespace Geometry {
 	);
 
 	// Gets the extrema of world axis-aligned Bounding Box of a group of TMeshes
-	void GetGroupExtrema(TArray<TriMesh*> TMeshes, FVector& Min, FVector& Max, bool NudgeOutward=false);
+	void GetGroupExtrema(const TArray<TriMesh*>& TMeshes, FVector& Min, FVector& Max, bool NudgeOutward=false);
 
 	void GetAxisAlignedExtrema(const BoundingBox& BBox, FVector& Min, FVector& Max, float NudgeOutward=0.0f);
 
-	void FlagTrisOutsideBox(const BoundingBox& BBox, const TriMesh& TMesh);
+	void FlagTrisOutsideBoxForCull(const BoundingBox& BBox, const TriMesh& TMesh);
+
+	void FlagTriVerticesInsideBoundsVolume(const TriMesh& TMesh);
 
 	// find all intersections between tris and create a picture of where each tri is inside and where it's outside
-	// other meshes; if 'inside' edges connect, they form polygons
+	// other meshes; if 'inside' edges connect, they form polygons. If LastIsBoundsVolume==true, the bounds volume
+	// will be excluded in the calculation of the bounding box of the group, which can improve accuracy when the
+	// group is smaller than the box
 	void FindIntersections(
 		TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
+		bool LastIsBoundsVolume=false
 	);
 
 	// Does P (roughly) lie on/inside Triangle ABC?

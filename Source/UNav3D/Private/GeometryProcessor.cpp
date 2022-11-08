@@ -247,7 +247,14 @@ void GeometryProcessor::FlagOutsideTris(TArray<TArray<TriMesh*>>& Groups) {
 		for (int j = 0; j < Group.Num(); j++) {
 			TriMesh& TMesh = *Group[j];
 			if (!Geometry::IsBoxAInBoxB(TMesh.Box, Data::BoundsVolumeTMesh.Box)) {
-				Geometry::FlagTrisOutsideBox(Data::BoundsVolumeTMesh.Box, TMesh);
+				Geometry::FlagTriVerticesInsideBoundsVolume(TMesh);
+			}
+			else {
+				auto& Grid = TMesh.Grid;
+				for (int k = 0; k < Grid.Num(); k++) {
+					Tri& T = Grid[k];
+					T.SetInsideBV();
+				}
 			}
 		}
 	}
@@ -278,7 +285,7 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 		}
 
 		// get mesh intersections between meshes, including Bounds Volume
-		Geometry::FindIntersections(Group, UPolys);
+		Geometry::FindIntersections(Group, UPolys, true);
 
 		// removing the bounds volume tmesh since we don't care what intersections landed on it
 		Group.RemoveAt(GroupCt - 1);

@@ -43,6 +43,21 @@ struct Tri {
 	// asking if this vertex is inside any other meshes; need to be set by Geometry::FlagObscuredTris() first
 	inline bool IsCObscured() const;
 
+	// asking if this vertex is inside bounds volume its mesh belongs to
+	inline bool IsAInsideBV() const;
+	
+	// asking if this vertex is inside bounds volume its mesh belongs to
+	inline bool IsBInsideBV() const;
+	
+	// asking if this vertex is inside bounds volume its mesh belongs to
+	inline bool IsCInsideBV() const;
+
+	// asking if the entire tri inside the bounds volume its mesh belongs to
+	inline bool IsInsideBV() const;
+
+	// asking if any vertex is inside the bounds volume its mesh belongs to
+	inline bool AnyInsideBV() const;
+
 	inline bool IsCull() const;
 
 	inline bool IsProblemCase() const;
@@ -57,6 +72,17 @@ struct Tri {
 	
 	// mark C as inside another mesh
 	inline void SetCObscured();
+
+	// mark A as inside its bounds volume
+	inline void SetAInsideBV();
+	
+	// mark B as inside its bounds volume
+	inline void SetBInsideBV();
+	
+	// mark C as inside its bounds volume
+	inline void SetCInsideBV();
+
+	inline void SetInsideBV();
 
 	// are any vertices obscured?
 	inline bool AnyObscured() const;
@@ -84,7 +110,7 @@ struct Tri {
 	FVector& B;
 	FVector& C;
 	FVector Normal;
-	uint32 Flags; // only using 2 of the 4 bytes
+	uint32 Flags;
 	// -- for faster intersection checking --
 	float Area; 
 	float LongestSidelenSq;
