@@ -65,14 +65,7 @@ void FUNav3DModule::PluginButtonClicked(){
 	// for adding/changing existing data. Will also be moving over to using only editor utility widget instead
 	// of built-in button.
 	// Also, in release, TMeshes will probably get emptied after NMeshes are populated.
-	for (int i = 0; i < Data::TMeshes.Num(); i++) {
-		Data::TMeshes[i].ResetVertexData();
-	}
-	for (int i = 0; i < Data::NMeshes.Num(); i++) {
-		Data::NMeshes[i].ResetVertexData();
-	}
-	Data::TMeshes.Empty();
-	Data::NMeshes.Empty();
+	Data::Reset();	
 	
 	if (GEditor == nullptr || GEditor->GetEditorWorldContext().World() == nullptr) {
 		UNAV_GENERR("GEditor or World Unavailable")
@@ -206,7 +199,6 @@ void FUNav3DModule::EnterProgressFrame(FScopedSlowTask& Task, const char* msg) c
 void FUNav3DModule::InitVertexCaptures(const UWorld* World) const {
 	TArray<AActor*> VertexCaptures;
 	UGameplayStatics::GetAllActorsOfClass(World, AVertexCapture::StaticClass(), VertexCaptures);
-	Data::VertexCaptures.Empty();
 	for (const auto VCA : VertexCaptures) {
 		AVertexCapture* VC = Cast<AVertexCapture>(VCA);
 		if (VC != nullptr) {

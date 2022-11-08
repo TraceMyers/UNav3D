@@ -4,17 +4,19 @@
 namespace {
 	
 	enum TRI_FLAGS {
+		TRI_OBSCURED =		0x000f,
 		TRI_A_OBSCURED =	0x0001,
 		TRI_B_OBSCURED =	0x0002,
 		TRI_C_OBSCURED =	0x0004,
-		TRI_CULL =			0x0008,
-		TRI_PROBLEM_CASE =	0x0010,
-		TRI_TO_POLYGON =	0x0020,
+		TRI_CHANGED =		0x00f0,
+		TRI_CULL =			0x0010,
+		TRI_PROBLEM_CASE =	0x0020,
+		TRI_TO_POLYGON =	0x0040,
 		TRI_ON_BOX_EDGE =	0x0100
 	};
 
 	constexpr float ONE_THIRD = 1.0f / 3.0f;
-	static FVector ZeroVec (0.0f, 0.0f, 0.0f);
+	FVector ZeroVec (0.0f, 0.0f, 0.0f);
 }
 
 FVector TempTri::GetCenter() const {
@@ -77,15 +79,15 @@ bool Tri::IsCObscured() const {
 	return Flags & TRI_C_OBSCURED;
 }
 
-bool Tri::IsTriCull() const {
+bool Tri::IsCull() const {
 	return Flags & TRI_CULL;	
 }
 
-bool Tri::IsTriProblemCase() const {
+bool Tri::IsProblemCase() const {
 	return Flags & TRI_PROBLEM_CASE;	
 }
 
-bool Tri::IsTriMarkedForPolygon() const {
+bool Tri::IsMarkedForPolygon() const {
 	return Flags & TRI_TO_POLYGON;
 }
 
@@ -109,12 +111,16 @@ bool Tri::AllObscured() const {
 	return IsAObscured() && IsBObscured() && IsCObscured();
 }
 
-void Tri::SetTriOnBoxEdge() {
+void Tri::SetOnBoxEdge() {
 	Flags |= TRI_ON_BOX_EDGE;	
 }
 
-bool Tri::IsTriOnBoxEdge() const {
+bool Tri::IsOnBoxEdge() const {
 	return Flags & TRI_ON_BOX_EDGE;	
+}
+
+bool Tri::IsChanged() const {
+	return Flags & TRI_CHANGED;	
 }
 
 void Tri::MarkForCull() {
@@ -131,5 +137,9 @@ void Tri::MarkForPolygon() {
 
 void Tri::CalculateNormal(FVector& _Normal) const {
 	_Normal = FVector::CrossProduct(A - C, A - B).GetUnsafeNormal();
+}
+
+FVector Tri::CalculateNormal(const FVector& _A, const FVector& _B, const FVector& _C) {
+	return FVector::CrossProduct(_A - _C, _A - _B).GetUnsafeNormal();
 }
 

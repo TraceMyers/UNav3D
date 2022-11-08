@@ -1,10 +1,10 @@
 ﻿#include "TriMesh.h"
 
 TriMesh::TriMesh() :
-	MeshActor(nullptr),
 	Box(),
 	VertexCt(0),
-	Vertices(nullptr)
+	Vertices(nullptr),
+	MeshActor(nullptr)
 {}
 
 TriMesh::TriMesh(const TriMesh& OtherMesh) {

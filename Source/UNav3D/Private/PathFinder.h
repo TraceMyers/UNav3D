@@ -8,7 +8,7 @@ public:
 
 	FPathFinder();
 	virtual ~FPathFinder() override;
-	// for reusability of FPathFinder
+	
 	bool StartThread();
 	void StopThread();
 	

@@ -53,6 +53,8 @@ namespace UNavDbg {
 	void PrintTri(const Tri& T);
 
 	bool DoesTriMatchVertexCaptures(const Tri& T);
+	
+	// inline void BreakOnVertexCaptureMatch(const Tri& A, const Tri& B) {
 
 	void SaveLine(const FVector& A, const FVector& B);
 

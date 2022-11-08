@@ -656,20 +656,20 @@ namespace Geometry {
 			
 			for (int i = 0; i < TrisA.Num(); i++) {
 				const Tri& T0 = TrisA[i];
-				if (T0.IsTriCull()) {
+				if (T0.IsCull()) {
 					continue;
 				}
 				
 				UnstructuredPolygon& PolyA = UPolysA[i];
 				for (int j = 0; j < TrisB.Num(); j++) {
 					const Tri& T1 = TrisB[j];
-					if (T1.IsTriCull()) {
+					if (T1.IsCull()) {
 						continue;
 					}
 					
-					const float DistSq = FVector::DistSquared(T0.A, T1.A);
-					// if it's even possible they could intersect...
-					if (DistSq <= T0.LongestSidelenSq + T1.LongestSidelenSq) {
+					// const float DistSq = FVector::DistSquared(T0.A, T1.A);
+					// if (DistSq < 0.5f * (T0.Area * T1.Area)) {
+					if (true) {
 
 						UnstructuredPolygon& PolyB = UPolysB[j];
 						
@@ -677,6 +677,8 @@ namespace Geometry {
 						if (Internal_GetTriPairPolyEdge(T0, T1, PolyA, PolyB)) {
 							PolyEdge& PolyEdge0 = PolyA.Edges.Last();
 							PolyEdge& PolyEdge1 = PolyB.Edges.Last();
+
+							// UNavDbg::BreakOnVertexCaptureMatch(T0, T1);
 							
 							// check where the edge line segment is inside and outside all other meshes to help
 							// with polygon creation
@@ -722,7 +724,7 @@ namespace Geometry {
 			constexpr uint32 flags = PolyEdge::ON_EDGE_AB | PolyEdge::ON_EDGE_BC | PolyEdge::ON_EDGE_CA;
 			for (int i = 0; i < TriGrid.Num(); i++) {
 				Tri& T = TriGrid[i];
-				if (T.IsTriCull()) {
+				if (T.IsCull()) {
 					// Tri already culled because it's outside of the bounds volume
 					continue;
 				}
@@ -996,10 +998,9 @@ namespace Geometry {
 		}	
 	}
 
-	void GetUPolygonsFromIntersections(
+	void FindIntersections(
 		TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
-		bool LastIsBoundsVolume
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys
 	) {
 		FVector GroupBBoxMin;
 		FVector GroupBBoxMax;

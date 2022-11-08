@@ -52,10 +52,9 @@ namespace Geometry {
 
 	// find all intersections between tris and create a picture of where each tri is inside and where it's outside
 	// other meshes; if 'inside' edges connect, they form polygons
-	void GetUPolygonsFromIntersections(
+	void FindIntersections(
 		TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
-		bool LastIsBoundsVolume=true
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys
 	);
 
 	// Does P (roughly) lie on/inside Triangle ABC?

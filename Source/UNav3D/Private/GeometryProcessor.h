@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 
+struct PolyNode;
 class UStaticMesh;
 struct TriMesh;
 struct Tri;
@@ -87,10 +88,10 @@ private:
 	static void AddUPolyNodes(TArray<UPolyNode>& Nodes, const FVector& A, const FVector& B);
 
 	// makes n polygons given n closed loop graphs created by intersections + edges on a tri
-	static void BuildPolygonsFromTri(
+	static void Polygonize(
 		Tri& T,
 		TArray<UPolyNode>& PolygonNodes,
-		TArray<Polygon>& TMeshPolygons,
+		TArray<Polygon>& Polygons,
 		int TriIndex
 	);
 
@@ -101,7 +102,7 @@ private:
 	);
 
 	// attempts to create a new set of tris from each polygon. assumes simple polygons of >= 3 vertices
-	static void CreateNewTriData(
+	static void Triangulize(
 		TArray<Polygon>& Polygons,
 		TArray<FVector>& Vertices,
 		TArray<FIntVector>& TriVertexIndices,
@@ -109,5 +110,14 @@ private:
 	);
 
 	static inline void LinkPolygonEdges(Polygon& P);
+
+	static inline void AddTriData(
+		TArray<FIntVector>& Indices,
+		const PolyNode& A,
+		const PolyNode& B,
+		const PolyNode& C,
+		const FVector& Normal,
+		int IndexOffset
+	);
 };
 

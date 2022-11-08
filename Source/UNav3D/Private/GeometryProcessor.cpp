@@ -277,7 +277,7 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 		}
 
 		// get mesh intersections between meshes, including Bounds Volume
-		Geometry::GetUPolygonsFromIntersections(Group, UPolys);
+		Geometry::FindIntersections(Group, UPolys);
 
 		// removing the bounds volume tmesh since we don't care what intersections landed on it
 		Group.RemoveAt(GroupCt - 1);
@@ -292,7 +292,8 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 			for (int k = 0; k < MeshUPolys.Num(); k++) {
 				Tri& T = TMesh.Grid[k];
 				
-				if (T.IsTriCull()) {
+				TArray<UPolyNode> PolygonNodes;
+				if (T.IsCull()) {
 					// Tris are marked for cull early if they fall outside of the bounds box
 					continue;
 				}
@@ -302,7 +303,6 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 					if (T.AllObscured()) {
 						// ...and all vertices are obscured, tri is enclosed -> cull
 						T.MarkForCull();
-						Data::CulledTris.Add(T);
 					}
 					else if (T.AnyObscured()) {
 						// ... and 0 < n < 3 of the vertices are obscured, something has gone wrong
@@ -313,16 +313,18 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 					continue;
 				}
 
-				TArray<UPolyNode> PolygonNodes;
 				
 				// creating graphs where edges (intersections and tri edges) connect, and where they're visible
 				PopulateNodes(T, UPoly, PolygonNodes);
 				
-				BuildPolygonsFromTri(T, PolygonNodes, TMeshPolygons, k);
+				Polygonize(T, PolygonNodes, TMeshPolygons, k);
 				
 				// TODO: each tri might come out with more than one polygon; for example, a set of intersections in the center...
 				// TODO: ... of the tri that do not touch tri edges - one outside, one inside; but, we start with one...
 				// TODO: ... add if ever touches edge, else subtract unless enclosed by subtract polygon
+				if (T.IsCull() || T.IsProblemCase()) {
+					Data::FailureCaseTris.Add(T);
+				}
 			}
 		}
 	}
@@ -367,7 +369,7 @@ void GeometryProcessor::FormMeshesFromGroups(
 		TArray<FVector*> Normals;
 		for (int j = 0; j < GroupPolygons.Num(); j++) {
 			auto& MeshPolygons = GroupPolygons[j];
-			CreateNewTriData(MeshPolygons, NewVertices, NewTriVertexIndices, Normals);
+			Triangulize(MeshPolygons, NewVertices, NewTriVertexIndices, Normals);
 		}
 
 		// making new vertex buffer
@@ -416,6 +418,7 @@ void GeometryProcessor::FormMeshesFromGroups(
 		for (auto& TMesh : Group) {
 			NavMesh.MeshActors.Add(TMesh->MeshActor);	
 		}
+		
 	}	
 }
 
@@ -497,7 +500,7 @@ void GeometryProcessor::AddUPolyNodes(TArray<UPolyNode>& Nodes, const FVector& A
 	Nodes[i1].Edges.Add(i0);
 }
 
-void GeometryProcessor::BuildPolygonsFromTri(
+void GeometryProcessor::Polygonize(
 	Tri& T,
 	TArray<UPolyNode>& PolygonNodes,
 	TArray<Polygon>& TMeshPolygons,
@@ -511,14 +514,7 @@ void GeometryProcessor::BuildPolygonsFromTri(
 		T.MarkForCull();
 		return;
 	}
-	// for (int m = 0; m < NodeCt; m++) {
-	// 	if (PolygonNodes[m].Edges.Num() % 2 == 1) {
-	// 		
-	// 		Data::FailureCaseTris.Add(T);
-	// 		T.MarkForCull();
-	// 		return;
-	// 	}
-	// }
+
 	// if the tri makes it here, its PolygonNodes array is fairly likely composed of one or more closed
 	// loops that can be used to form polygon(s)
 	for (int StartIndex = 0; StartIndex < NodeCt; ) {
@@ -531,7 +527,7 @@ void GeometryProcessor::BuildPolygonsFromTri(
 			continue;
 		}
 		
-		Polygon BuildingPolygon(TriIndex);
+		Polygon BuildingPolygon(TriIndex, T.Normal);
 		BuildingPolygon.Vertices.Add(PolyNode(StartNode.Location));
 		int PrevIndex = StartIndex;
 		
@@ -544,8 +540,8 @@ void GeometryProcessor::BuildPolygonsFromTri(
 				if (SNIndexOfEdge != -1) {
 					StartNode.Edges.RemoveAt(SNIndexOfEdge, 1, false);
 				}
-				BuildingPolygon.Normal = &T.Normal;
 				if (BuildingPolygon.Vertices.Num() >= 3) {
+					T.MarkForPolygon();	
 					TMeshPolygons.Add(BuildingPolygon);
 				}
 				break;
@@ -557,12 +553,14 @@ void GeometryProcessor::BuildPolygonsFromTri(
 			// remove the connection both ways
 			EdgeIndices->RemoveAt(0, 1, false);
 			if (EdgeNode.Edges.Num() <= 1) {
+				T.MarkProblemCase();
 				if (EdgeNode.Edges.Find(PrevIndex) != -1) {
 					EdgeNode.Edges.RemoveSingle(PrevIndex);
 				}
 				break;
 			}
 			if (EdgeNode.Edges.Find(PrevIndex) == -1) {
+				T.MarkProblemCase();
 				break;
 			}
 			EdgeNode.Edges.RemoveSingle(PrevIndex);
@@ -572,7 +570,6 @@ void GeometryProcessor::BuildPolygonsFromTri(
 			PrevIndex = EdgeIndex;
 		}
 	}
-	T.MarkForPolygon();	
 }
 
 void GeometryProcessor::PopulateUnmarkedTriData(
@@ -591,11 +588,11 @@ void GeometryProcessor::PopulateUnmarkedTriData(
 		int StartK = 0;
 		const int GridCt = Grid.Num();
 		for ( ; StartK < GridCt; StartK++) {
-			const auto& Tri = Grid[StartK];
-			if (!Tri.IsTriCull() && !Tri.IsTriMarkedForPolygon()) {
-				const int AIndex = TempVertices.Add(&Tri.A);
-				const int BIndex = TempVertices.Add(&Tri.B);
-				const int CIndex = TempVertices.Add(&Tri.C);
+			const auto& T = Grid[StartK];
+			if (!T.IsChanged()) {
+				const int AIndex = TempVertices.Add(&T.A);
+				const int BIndex = TempVertices.Add(&T.B);
+				const int CIndex = TempVertices.Add(&T.C);
 				TempTriVertexIndices.Add(FIntVector(AIndex, BIndex, CIndex));
 				VerticesAdded += 3;
 				StartK++;
@@ -613,7 +610,7 @@ void GeometryProcessor::PopulateUnmarkedTriData(
 		// polygon->tri process.
 		for (int k = StartK; k < GridCt; k++) {
 			const auto& Tri = Grid[k];
-			if (!Tri.IsTriCull() && !Tri.IsTriMarkedForPolygon()) {
+			if (!Tri.IsChanged()) {
 				TArrayView<FVector*> TempVerticesSlice =
 					TArrayView<FVector*>(TempVertices).Slice(SliceStart, VerticesAdded);
 				int AIndex = TempVerticesSlice.Find(&Tri.A);
@@ -649,7 +646,7 @@ void GeometryProcessor::PopulateUnmarkedTriData(
 
 // https://www.geometrictools.com/Documentation/TriangulationByEarClipping.pdf
 // Ear clipping is a bit slow compared to other methods, but it's the easiest to implement
-void GeometryProcessor::CreateNewTriData(
+void GeometryProcessor::Triangulize(
 	TArray<Polygon>& Polygons,
 	TArray<FVector>& Vertices,
 	TArray<FIntVector>& TriVertexIndices,
@@ -658,7 +655,6 @@ void GeometryProcessor::CreateNewTriData(
 	TArray<Geometry::VERTEX_T> VertTypes;
 	for (auto& Polygon : Polygons) {
 		TArray<PolyNode>& PolyVerts = Polygon.Vertices;
-		const FVector& PolyNormal = *Polygon.Normal;
 		const int PolyVertCt = PolyVerts.Num();
 		const int AddVerticesOffset = Vertices.Num();
 
@@ -666,12 +662,10 @@ void GeometryProcessor::CreateNewTriData(
 			for (int i = 0; i < PolyVerts.Num(); i++) {
 				Vertices.Add(PolyVerts[i].Location);
 			}
-			TriVertexIndices.Add(FIntVector(
-				AddVerticesOffset,
-				AddVerticesOffset + 1,
-				AddVerticesOffset + 2
-			));
-			Normals.Add(Polygon.Normal);
+			AddTriData(
+				TriVertexIndices, PolyVerts[0], PolyVerts[1], PolyVerts[2], Polygon.Normal, AddVerticesOffset
+			);
+			Normals.Add(&Polygon.Normal);
 			continue;
 		}
 
@@ -710,7 +704,7 @@ void GeometryProcessor::CreateNewTriData(
 				// WalkNode being checked for interior/exterior - whether the acute angle made by the 3 vertices falls
 				// inside the polygon or outside it
 				VertTypes[CurIndex] = Geometry::GetPolyVertexType(
-					PolyNormal,
+					Polygon.Normal,
 					-NextVertVec[Prev2Index],
 					NextVertVec[Prev1Index],
 					NextVertVec[CurIndex],
@@ -730,28 +724,23 @@ void GeometryProcessor::CreateNewTriData(
 				FailCt = 0;
 				PolyNode* Prev = WalkNode->Prev;
 				PolyNode* Next = WalkNode->Next;
-				const int PrevIndex = Prev->PolygonIndex;
-				const int NextIndex = Next->PolygonIndex;
 
-				// TODO: turn this back into a function that rearranges vertices if bad normal (undone with hard reset :()
-				TempTriVertexIndices.Add(FIntVector(
-					PrevIndex + AddVerticesOffset,
-					CurIndex + AddVerticesOffset,
-					NextIndex + AddVerticesOffset
-				));
+				AddTriData(
+					TempTriVertexIndices, *Prev, *WalkNode, *Next, Polygon.Normal, AddVerticesOffset
+				);	
 				Prev->Next = Next;
 				Next->Prev = Prev;
 				
 				if (--AvailableCt == 3) {
-					TempTriVertexIndices.Add(FIntVector(
-						 PrevIndex + AddVerticesOffset,
-						 NextIndex + AddVerticesOffset,
-						 Next->Next->PolygonIndex + AddVerticesOffset
-					));
+					AddTriData(
+						TempTriVertexIndices, *Prev, *Next, *Next->Next, Polygon.Normal, AddVerticesOffset
+					);	
 					FillSuccess = true;
 					break;
 				}
 				
+				const int PrevIndex = Prev->PolygonIndex;
+				const int NextIndex = Next->PolygonIndex;
 				IsEar[PrevIndex] = Geometry::IsEar(*Prev);
 				IsEar[NextIndex] = Geometry::IsEar(*Next);
 
@@ -760,14 +749,14 @@ void GeometryProcessor::CreateNewTriData(
 				const int BackTwiceIndex = BackOnce.Prev->PolygonIndex;
 				
 				VertTypes[PrevIndex] = Geometry::GetPolyVertexType(
-					PolyNormal,
+					Polygon.Normal,
 					-NextVertVec[BackTwiceIndex],
 					NextVertVec[BackOnceIndex],
 					NextVertVec[PrevIndex],
 					VertTypes[BackOnceIndex]
 				);
 				VertTypes[NextIndex] = Geometry::GetPolyVertexType(
-					PolyNormal,
+					Polygon.Normal,
 					-NextVertVec[BackOnceIndex],
 					NextVertVec[PrevIndex],
 					NextVertVec[NextIndex],
@@ -785,7 +774,7 @@ void GeometryProcessor::CreateNewTriData(
 			}
 			TriVertexIndices.Append(TempTriVertexIndices);
 			TArray<FVector*> TriNormals;
-			TriNormals.Init(Polygon.Normal, TempTriVertexIndices.Num());
+			TriNormals.Init(&Polygon.Normal, TempTriVertexIndices.Num());
 			Normals.Append(TriNormals);
 		}
 		else {
@@ -811,4 +800,26 @@ void GeometryProcessor::LinkPolygonEdges(Polygon& P) {
 	VL.Prev = &PolyVerts[VertCtM1-1];
 	VL.Next = &V0;
 	VL.PolygonIndex = VertCtM1;
+}
+
+void GeometryProcessor::AddTriData(
+	TArray<FIntVector>& Indices,
+	const PolyNode& A,
+	const PolyNode& B,
+	const PolyNode& C,
+	const FVector& Normal,
+	int IndexOffset
+) {
+	// Polygons often end up oriented differently than the original tris. Just fixing the indices here so
+	// the procedural mesh representation of UNavMesh has the indices in the correct order
+	if (FVector::DotProduct(Tri::CalculateNormal(A.Location, B.Location, C.Location), Normal) <= 0.0f) {
+		Indices.Add(FIntVector(
+			C.PolygonIndex + IndexOffset, B.PolygonIndex + IndexOffset, A.PolygonIndex + IndexOffset
+		));
+	}
+	else {
+		Indices.Add(FIntVector(
+			A.PolygonIndex + IndexOffset, B.PolygonIndex + IndexOffset, C.PolygonIndex + IndexOffset
+		));
+	}
 }

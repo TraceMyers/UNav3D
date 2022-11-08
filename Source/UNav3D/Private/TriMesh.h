@@ -18,9 +18,9 @@ struct TriMesh {
 	// Clears Vertices and Tris, since they are inextricably linked
 	void ResetVertexData();
 
-	AStaticMeshActor* MeshActor;
 	BoundingBox Box;
 	int VertexCt;
 	FVector* Vertices;
 	TriGrid Grid;
+	AStaticMeshActor* MeshActor;
 };

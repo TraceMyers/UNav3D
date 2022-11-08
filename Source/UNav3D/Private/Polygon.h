@@ -13,16 +13,16 @@ struct PolyNode {
 // edges are between adjacent vertices; index Num() - 1 connects to 0; Every polygon is a stepping stone
 // between a triangle that was intersected and a new set of triangles with no intersections.
 struct Polygon {
-	Polygon(int _TriIndex) :
+	Polygon(int _TriIndex, FVector& _Normal) :
 		TriIndex(_TriIndex),
 		Mode(SUBTRACT), // guilty until proven innocent :(
-		Normal(nullptr)
+		Normal(_Normal)
 	{}
 
 	TArray<PolyNode> Vertices;
 	int TriIndex;
 	enum POLYGON_MODE {SUBTRACT, ADD} Mode;
-	FVector* Normal;
+	FVector& Normal;
 };
 
 // used to denote intersections between triangles, for building polygons

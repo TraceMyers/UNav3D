@@ -1,6 +1,5 @@
 ﻿#include "PathFinder.h"
 
-#include "Misc/ScopedSlowTask.h"
 
 FPathFinder::FPathFinder() :
 	IsThreadRun(false)

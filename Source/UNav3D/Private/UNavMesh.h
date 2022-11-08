@@ -14,10 +14,10 @@ struct UNavMesh {
 	// Clears Vertices and Tris, since they are inextricably linked
 	void ResetVertexData();
 
-	TArray<AStaticMeshActor*> MeshActors;
-	TArray<BoundingBox> ActorBoxes;
 	BoundingBox Box;
 	int VertexCt;
 	FVector* Vertices;
 	TriGrid Grid;
+	TArray<AStaticMeshActor*> MeshActors;
+	TArray<BoundingBox> ActorBoxes;
 };

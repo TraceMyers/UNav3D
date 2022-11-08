@@ -43,11 +43,11 @@ struct Tri {
 	// asking if this vertex is inside any other meshes; need to be set by Geometry::FlagObscuredTris() first
 	inline bool IsCObscured() const;
 
-	inline bool IsTriCull() const;
+	inline bool IsCull() const;
 
-	inline bool IsTriProblemCase() const;
+	inline bool IsProblemCase() const;
 
-	inline bool IsTriMarkedForPolygon() const;
+	inline bool IsMarkedForPolygon() const;
 
 	// mark A as inside another mesh
 	inline void SetAObscured();
@@ -64,9 +64,11 @@ struct Tri {
 	// are all vertices obscured?
 	inline bool AllObscured() const;
 
-	inline void SetTriOnBoxEdge();
+	inline void SetOnBoxEdge();
 
-	inline bool IsTriOnBoxEdge() const;
+	inline bool IsOnBoxEdge() const;
+
+	inline bool IsChanged() const;
 	
 	void MarkForCull();
 
@@ -75,6 +77,8 @@ struct Tri {
 	void MarkForPolygon();
 
 	void CalculateNormal(FVector& Normal) const;
+
+	static FVector CalculateNormal(const FVector &A, const FVector& B, const FVector& C);
 
 	FVector& A;
 	FVector& B;

@@ -105,7 +105,7 @@ void UNavDbg::DrawTriMeshVerticesMulti(const UWorld* World, const TArray<TriMesh
 void UNavDbg::DrawTriGridTris(const UWorld* World, const TriGrid& Tris) {
 	for (int i = 0; i < Tris.Num(); i++) {
 		const auto& Tri = Tris[i];
-		if (Tri.IsTriCull()) {
+		if (Tri.IsCull()) {
 			DrawDebugLine(World, Tri.A, Tri.B, FColor::Red, false, DBG_DRAW_TIME, 0, 1.0f);
 			DrawDebugLine(World, Tri.B, Tri.C, FColor::Red, false, DBG_DRAW_TIME, 0, 1.0f); 
 			DrawDebugLine(World, Tri.C, Tri.A, FColor::Red, false, DBG_DRAW_TIME, 0, 1.0f);
@@ -215,12 +215,12 @@ bool UNavDbg::DoesTriMatchVertexCaptures(const Tri& T) {
 				return true;
 			}
 		}
-		else if (Geometry::IsPointInsideBox(VC->GetBBox(), T.B)) {
+		if (Geometry::IsPointInsideBox(VC->GetBBox(), T.B)) {
 			if (++InsideCt == 3) {
 				return true;
 			}
 		}
-		else if (Geometry::IsPointInsideBox(VC->GetBBox(), T.C)) {
+		if (Geometry::IsPointInsideBox(VC->GetBBox(), T.C)) {
 			if (++InsideCt == 3) {
 				return true;
 			}
@@ -228,6 +228,12 @@ bool UNavDbg::DoesTriMatchVertexCaptures(const Tri& T) {
 	}
 	return false;
 }
+
+// void UNavDbg::BreakOnVertexCaptureMatch(const Tri& A, const Tri& B) {
+// 	if (UNavDbg::DoesTriMatchVertexCaptures(A) && UNavDbg::DoesTriMatchVertexCaptures(B)) {
+// 		printf("breaking on vertex capture match\n");
+// 	}
+// }
 
 void UNavDbg::SaveLine(const FVector& A, const FVector& B) {
 	LineA.Add(A);
