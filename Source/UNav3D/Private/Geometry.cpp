@@ -662,21 +662,19 @@ namespace Geometry {
 			
 			for (int i = 0; i < TrisA.Num(); i++) {
 				const Tri& T0 = TrisA[i];
-				// if (T0.IsCull()) {
-				// 	continue;
-				// }
+				if (T0.IsCull()) {
+					continue;
+				}
 				
 				UnstructuredPolygon& PolyA = UPolysA[i];
 				for (int j = 0; j < TrisB.Num(); j++) {
 					const Tri& T1 = TrisB[j];
-					// if (T1.IsCull()) {
-					// 	continue;
-					// }
+					if (T1.IsCull()) {
+						continue;
+					}
 					
-					// const float DistSq = FVector::DistSquared(T0.A, T1.A);
-					// if (DistSq < 0.5f * (T0.Area * T1.Area)) {
-					if (true) {
-
+					const float DistSq = FVector::DistSquared(T0.A, T1.A);
+					if (DistSq < 0.5f * (T0.Area * T1.Area)) {
 						UnstructuredPolygon& PolyB = UPolysB[j];
 						
 						// if an intersection between these triangles exists, put it in both polys
@@ -684,8 +682,6 @@ namespace Geometry {
 							PolyEdge& PolyEdge0 = PolyA.Edges.Last();
 							PolyEdge& PolyEdge1 = PolyB.Edges.Last();
 
-							UNavDbg::BreakOnVertexCaptureMatch(T0, T1);
-							
 							// check where the edge line segment is inside and outside all other meshes to help
 							// with polygon creation
 							const bool AEnclosed = Internal_GetObscuredDistances(

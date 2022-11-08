@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 
+struct PolyEdge;
 struct PolyNode;
 class UStaticMesh;
 struct TriMesh;
@@ -41,6 +42,8 @@ public:
 	);
 
 private:
+
+	static constexpr float EPSILON = 3e-4f;
 
 	// Copies the index buffer of the mesh into a new buffer
 	uint16* GetIndices(const FStaticMeshLODResources& LOD, uint32& IndexCt) const;
@@ -83,9 +86,11 @@ private:
 	// and links them together into graphs
 	static void PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<UPolyNode>& PolygonNodes);
 
+	static bool DoesEdgeConnect(const TArrayView<UPolyNode>& Nodes, const PolyEdge& Edge);
+
 	// helper to PopulateNodes that searches for whether or not nodes exist at A and B first, adds
 	// if not, and links them
-	static void AddUPolyNodes(TArray<UPolyNode>& Nodes, const FVector& A, const FVector& B);
+	static void AddUPolyNodes(TArray<UPolyNode>& Nodes, const FVector& A, const FVector& B, int& NodeCtr);
 
 	// makes n polygons given n closed loop graphs created by intersections + edges on a tri
 	static void Polygonize(

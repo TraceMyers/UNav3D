@@ -9,6 +9,7 @@
 #include "Polygon.h"
 #include "Debug.h"
 #include "DoubleVector.h"
+#include "SelectionSet.h"
 #include "UNavMesh.h"
 #include "Containers/ArrayView.h"
 #include "string.h"
@@ -292,7 +293,6 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 			for (int k = 0; k < MeshUPolys.Num(); k++) {
 				Tri& T = TMesh.Grid[k];
 
-				// UNavDbg::BreakOnVertexCaptureMatch(T);
 				TArray<UPolyNode> PolygonNodes;
 				if (T.IsCull()) {
 					// Tris are marked for cull early if they fall outside of the bounds box
@@ -314,6 +314,7 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 					continue;
 				}
 
+				UNavDbg::BreakOnVertexCaptureMatch(T);
 				
 				// creating graphs where edges (intersections and tri edges) connect, and where they're visible
 				PopulateNodes(T, UPoly, PolygonNodes);
@@ -425,14 +426,23 @@ void GeometryProcessor::FormMeshesFromGroups(
 
 void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<UPolyNode>& PolygonNodes) {
 	const TArray<PolyEdge>& Edges = UPoly.Edges;
+	TArray<const PolyEdge*> RecheckEdges;
+	const int InitNodeCt = PolygonNodes.Num();
+	int AddedNodes = 0;
 	
 	for (int i = 0; i < Edges.Num(); i++) {
 		const PolyEdge& PEdge = Edges[i];
 		const TArray<float> PtDistances = PEdge.TrDropDistances;
 		if (PtDistances.Num() == 0) {
-			// A is not enclosed here, so is B, so create 2 nodes. else, none
+			// if A is not enclosed here, so is B, so create 2 nodes. if both enclosed, create none.
 			if (!PEdge.IsAEnclosed()) {
-				AddUPolyNodes(PolygonNodes, PEdge.A, PEdge.B);
+				AddUPolyNodes(PolygonNodes, PEdge.A, PEdge.B, AddedNodes);
+			}
+			else {
+				// however, it's possible that an edge incorrectly identified itself as being inside another mesh
+				// due to a glancing hit on that mesh during a line test. We can later ask the other nodes if they mach
+				// the nodes on this edge
+				RecheckEdges.Add(&PEdge);
 			}
 			continue;
 		}
@@ -446,7 +456,7 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 		if (PEdge.IsAEnclosed()) {
 			StartLoc = PEdge.A + Dir * PtDistances[0];
 			if (PtDistCt == 1) {
-				AddUPolyNodes(PolygonNodes, StartLoc, PEdge.B);
+				AddUPolyNodes(PolygonNodes, StartLoc, PEdge.B, AddedNodes);
 				continue;	
 			}
 			start_j = 1;
@@ -458,32 +468,65 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 
 		for (int j = start_j; ; ) {
 			FVector EndLoc = PEdge.A + Dir * PtDistances[j];
-			AddUPolyNodes(PolygonNodes, StartLoc, EndLoc);
+			AddUPolyNodes(PolygonNodes, StartLoc, EndLoc, AddedNodes);
 			if (++j == PtDistCt) {
 				break;		
 			}
 			StartLoc = PEdge.A + Dir * PtDistances[j];
 			if (++j == PtDistCt) {
-				AddUPolyNodes(PolygonNodes, StartLoc, PEdge.B);
+				AddUPolyNodes(PolygonNodes, StartLoc, PEdge.B, AddedNodes);
 				break;
 			}
 		}
 	}
+	if (AddedNodes > 0 && RecheckEdges.Num() != 0) {
+		const TArrayView<UPolyNode> NodesSlice =
+			TArrayView<UPolyNode>(PolygonNodes).Slice(InitNodeCt, AddedNodes);
+		for (const auto EdgePtr : RecheckEdges) {
+			auto& Edge = *EdgePtr;
+			if (DoesEdgeConnect(NodesSlice, Edge)) {
+				AddUPolyNodes(PolygonNodes, Edge.A,  Edge.B, AddedNodes);	
+			}	
+		}
+	}
 }
 
-void GeometryProcessor::AddUPolyNodes(TArray<UPolyNode>& Nodes, const FVector& A, const FVector& B) {
-	constexpr float EPSILON = 1e-2f;
+// Used by Populate Nodes in case an edge incorrectly identifies itself as being inside another mesh. In this case,
+// due to the nature of the line test, a single edge forms a single sample on whether or not both of its nodes
+// are enclosed. If there are two overlapping nodes that both disagree with this edge, we're statistically inclined
+// to believe the majority of samples.
+bool GeometryProcessor::DoesEdgeConnect(const TArrayView<UPolyNode>& Nodes, const PolyEdge& Edge) {
+	bool AConnection = false;
+	bool BConnection = false;
+	for (const auto& Node : Nodes) {
+		if (!AConnection && FVector::DistSquared(Edge.A, Node.Location) < EPSILON) {
+			if (BConnection) {
+				return true;
+			}
+			AConnection = true;
+		}
+		if (!BConnection && FVector::DistSquared(Edge.B, Node.Location) < EPSILON) {
+			if (AConnection) {
+				return true;
+			}
+			BConnection = true;
+		}
+	}
+	return false;
+}
+
+void GeometryProcessor::AddUPolyNodes(TArray<UPolyNode>& Nodes, const FVector& A, const FVector& B, int& NodeCtr) {
 	int i0 = -1;
 	int i1 = -1;
 	for (int i = 0; i < Nodes.Num(); i++) {
 		UPolyNode& PNode = Nodes[i];
-		if (i0 == -1 && FVector::Dist(A, PNode.Location) < EPSILON) {
+		if (i0 == -1 && FVector::DistSquared(A, PNode.Location) < EPSILON) {
 			i0 = i;
 			if (i1 != -1) {
 				goto ADDPOLY_LINK;
 			}
 		}
-		else if (i1 == -1 && FVector::Dist(B, PNode.Location) < EPSILON) {
+		else if (i1 == -1 && FVector::DistSquared(B, PNode.Location) < EPSILON) {
 			i1 = i;
 			if (i0 != -1) {
 				goto ADDPOLY_LINK;
@@ -492,9 +535,11 @@ void GeometryProcessor::AddUPolyNodes(TArray<UPolyNode>& Nodes, const FVector& A
 	}
 	if (i0 == -1) {
 		i0 = Nodes.Add(UPolyNode(A));
+		NodeCtr++;
 	}
 	if (i1 == -1) {
 		i1 = Nodes.Add(UPolyNode(B));
+		NodeCtr++;
 	}
 	ADDPOLY_LINK:
 	Nodes[i0].Edges.Add(i1);
