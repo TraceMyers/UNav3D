@@ -12,6 +12,17 @@ class TriGrid;
 #define UNAV_DEV
 #define DBG_DRAW_TIME 30.0f
 
+#define LOCTEXT_NAMESPACE "UNav3D"
+#define UNAV_GENMSG(x) \
+	FMessageDialog::Open( \
+		EAppMsgType::Ok, FText::Format(LOCTEXT("UNav3D", "UNAV3D Message: {0}", FText::FromString(x)) \
+	);
+#define UNAV_GENERR(x) \
+	FMessageDialog::Open( \
+		EAppMsgType::Ok, FText::Format(LOCTEXT("UNav3D", "UNAV3D ERROR: {0}"), FText::FromString(x)) \
+	);
+#undef LOCTEXT_NAMESPACE
+
 namespace UNavDbg {
 	
 	void PrintTriMesh(const TriMesh& TMesh);
@@ -63,4 +74,6 @@ namespace UNavDbg {
 	void SaveLine(const FVector& A, const FVector& B);
 
 	void DrawSavedLines(const UWorld* World);
+
+	void PrintThreadSuccess(FCriticalSection* Mutex);
 }

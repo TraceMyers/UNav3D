@@ -28,17 +28,12 @@ public:
 	// Pulls Static Mesh data and populates TMesh with it. If TForm != nullptr, it will be used to transform the vertices
 	GEOPROC_RESPONSE PopulateTriMesh(TriMesh& TMesh, bool DoTransform=true) const;
 
-	// Takes Populated TriMeshes, groups them by overlap, and reforms the overlapped meshes into continuous meshes
-	// Populates OutMeshes with new
-	static GEOPROC_RESPONSE PopulateNavMeshes(
-		TArray<TriMesh>& InMeshes,
-		TArray<UNavMesh>& OutMeshes
-	);
+	// Takes Populated TriMeshes and groups them by overlap
+	static void GroupTriMeshes(TArray<TriMesh>& TMeshes, TArray<TArray<TriMesh*>>& Groups);
 
-	// re-polygonizes nearby tris with similar normals and reforms triangles from those polygons, simplifying the
-	// meshes
-	static GEOPROC_RESPONSE SimplifyNavMeshes(
-		TArray<UNavMesh>& NMeshes
+	// Takes a group of overlapping TriMeshes, simplifies the individual meshes, and reforms the group into one mesh
+	static void ReformTriMesh(
+		TArray<TriMesh*>* Group, FCriticalSection* Mutex, const FThreadSafeBool* IsThreadRun, UNavMesh* NMesh
 	);
 
 private:
@@ -59,25 +54,21 @@ private:
 		uint32 VertexCt
 	);
 
-	// Group Meshes together if they overlap
-	static void GetIntersectGroups(
-		TArray<TArray<TriMesh*>>& Groups,
-		TArray<TriMesh>& InMeshes
-	);
-
-	// flag tris fully outside the bounds valume for cull
-	static void FlagOutsideTris(TArray<TArray<TriMesh*>>& Groups);
+	// flag tris with flags that relate to their location relative to the bounds volume
+	static void FlagTrisWithBV(TArray<TriMesh*>& TMeshes);
 
 	// Find where meshes intersect and build polygons out of the exposed portions of tris
 	static void BuildPolygonsAtMeshIntersections(
-		TArray<TArray<TriMesh*>>& Groups,
-		TArray<TArray<TArray<Polygon>>>& Polygons
+		TArray<TriMesh*>& Group,
+		TArray<TArray<Polygon>>& Polygons,
+		FCriticalSection* Mutex
 	);
 
-	static void FormMeshesFromGroups(
-		TArray<TArray<TriMesh*>>& Groups,
-		TArray<TArray<TArray<Polygon>>>& Polygons,
-		TArray<UNavMesh>& NavMeshes
+	static void FormMeshFromGroup(
+		TArray<TriMesh*>& Group,
+		TArray<TArray<Polygon>>& Polygons,
+		UNavMesh* NMesh,
+		FCriticalSection* Mutex
 	);
 
 	// each edge (intersections and tri edges) on a tri has points along it which mark where the edge
@@ -124,5 +115,9 @@ private:
 		const FVector& Normal,
 		int IndexOffset
 	);
+	
+	// re-polygonizes nearby tris with similar normals and reforms triangles from those polygons, simplifying the
+	// meshes
+	static GEOPROC_RESPONSE SimplifyTriMesh(TriMesh& TMesh);
 };
 

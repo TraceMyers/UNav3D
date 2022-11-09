@@ -62,26 +62,140 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(TriMesh& 
 }
 
 // Does not group Mesh A and Mesh B if Mesh A is entirely inside MeshB, unless Mesh C intersects both
-GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateNavMeshes(
-	TArray<TriMesh>& InMeshes,
-	TArray<UNavMesh>& OutMeshes
+void GeometryProcessor::GroupTriMeshes(
+	TArray<TriMesh>& TMeshes,
+	TArray<TArray<TriMesh*>>& Groups
 ) {
-	OutMeshes.Reserve(InMeshes.Num());
-	TArray<TArray<TriMesh*>> IntersectGroups;
+	Groups.Reserve(TMeshes.Num());
+	const int InMeshCt = TMeshes.Num();
+	TArray<int> GroupIndices;
+	GroupIndices.Init(-1, InMeshCt);
+	TArray<int> PotentialIntersectIndices;
+	TArray<int> IntersectIndices;
+	TArray<TriMesh*> Remove;
+	
+	for (int i = 0; i < InMeshCt - 1; i++) {
+		TriMesh& TMeshA = TMeshes[i];
+		
+		// if the TMesh already belongs to a group, get the group, otherwise make a group
+		int GrpIndex = GroupIndices[i];
+		if (GrpIndex == -1) {
+			GrpIndex = Groups.Add(TArray<TriMesh*>());
+			GroupIndices[i] = GrpIndex;
+		}
+		
+		// check forward for bbox overlaps
+		for (int j = i + 1; j < InMeshCt; j++) {
+			const int& OtherGrpIndex = GroupIndices[j];
+			// if TMeshA and TMeshB are already grouped, no need to check overlap
+			if (OtherGrpIndex == GrpIndex) {
+				continue;
+			}
+			TriMesh& TMeshB = TMeshes[j];
+			if (Geometry::DoBoundingBoxesOverlap(TMeshA.Box, TMeshB.Box)) {
+				PotentialIntersectIndices.Add(j);
+			}
+		}
 
-	GetIntersectGroups(IntersectGroups, InMeshes);
-	UNavDbg::PrintTriMeshIntersectGroups(IntersectGroups);
-	TArray<TArray<TArray<Polygon>>> Polygons;
+		// populate group indices array with indices of mesh intersections
+		if(Geometry::GetTriMeshIntersectGroups(IntersectIndices, PotentialIntersectIndices, TMeshA, TMeshes)) {
+			for (int j = 0; j < IntersectIndices.Num(); j++) {
+				const int& IndexOfOverlap = IntersectIndices[j];
+				const int OverlapGrpIndex = GroupIndices[IndexOfOverlap];
+				// merge groups if overlapping TMesh belongs to a different group (already checked if in same group)
+				if (OverlapGrpIndex == -1) {
+					GroupIndices[IndexOfOverlap] = GrpIndex;
+				}
+				else {
+					for (int m = 0; m < InMeshCt; m++) {
+						if (GroupIndices[m] == OverlapGrpIndex) {
+							GroupIndices[m] = GrpIndex;
+						}	
+					}
+				}
+			}	
+		}
+
+		PotentialIntersectIndices.Empty(InMeshCt);
+		IntersectIndices.Empty(InMeshCt);
+	}
+	// the very last mesh may be an island (no overlaps)
+	const int EndIndex = InMeshCt - 1;
+	if (GroupIndices[EndIndex] == -1) {
+		GroupIndices[EndIndex] = Groups.Add(TArray<TriMesh*>());
+	}
+
+	// populate groups with known group indices
+	for (int i = 0; i < InMeshCt; i++) {
+		const int& GrpIndex = GroupIndices[i];
+		Groups[GrpIndex].Add(&TMeshes[i]);
+	}
 	
-	FlagOutsideTris(IntersectGroups);
-	BuildPolygonsAtMeshIntersections(IntersectGroups, Polygons);
-	FormMeshesFromGroups(IntersectGroups, Polygons, OutMeshes);
+	for (int i = 0; ; ) {
+		if (i >= Groups.Num()) {
+			break;
+		}
+		if (Groups[i].Num() == 0) {
+			Groups.RemoveAtSwap(i);
+		}
+		else {
+			i++;
+		}
+	}
 	
-	return GEOPROC_SUCCESS;
+	UNavDbg::PrintTriMeshIntersectGroups(Groups);
 }
 
-GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::SimplifyNavMeshes(TArray<UNavMesh>& NMeshes) {
+void GeometryProcessor::ReformTriMesh(
+	TArray<TriMesh*>* Group, FCriticalSection* Mutex, const FThreadSafeBool* IsThreadRun, UNavMesh* NMesh
+) {
+	TArray<TArray<Polygon>> Polygons;
+	auto& GroupRef = *Group;
+	// SimplifyTriMesh()
+	FlagTrisWithBV(GroupRef);
+	if (!IsThreadRun) {
+		return;
+	}
+	BuildPolygonsAtMeshIntersections(GroupRef, Polygons, Mutex);
+	if (!IsThreadRun) {
+		return;
+	}
+	FormMeshFromGroup(GroupRef, Polygons, NMesh, Mutex);
+}
+
+GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::SimplifyTriMesh(TriMesh& TMesh) {
 	// TODO: parameterize the values that determine the outcome here
+	// thread:
+	// create new polygon vertex pool VPool
+	// create all polygon array
+	// create edge polygon array (indices of all)
+	// until tris exhausted:
+	//		create batch by connecting tris with similar vertices; batch tris are collected with BFS; all batches
+	//		after first should start with a tri that was a neighbor of a tri in the previous batch
+	//			while creating, form groups of similar normal'd tris; each group has a normal deviation budget
+	//			that accrues per add; it's possible there's no need for normal delta preference
+	//		create polygon group array
+	//		per tri group:
+	//			form a polygon with the edge of group
+	//			over all polygon edges, check for neighboring edge polygons and connect if found
+	//			remove the original tris from the pool
+	//			add polygon to group array
+	//		per group polygon i = 0 to end - 2:
+	//			per group polygon j = i + 1 to end - 1:
+	//				use tri connections to form neighbor connections (will be useful in graph creation)
+	//				simplify edges between i and j by culling vertices that do not deviate beyond some delta from start search
+	//				Add shared edge vertices to pool, and share references
+	//				remove neighbor tris
+	//		add polygons to all polygons
+	//		add indices to edge index array if edge
+	// per polygon i = 0 to end - 2 in edge polygons:
+	//		per polygon j = i + 1 to end - 1 in edge polygons:
+	//			use tri connections to form neighbor connections (will be useful in graph creation)
+	//			simplify edges between i and j by culling vertices that do not deviate beyond some delta from start search
+	//			Add shared edge vertices to pool, and share references
+	//			remove neighbor tris
+	//	triangulize polygons
+	//	re-make mesh with new tris
 	return GEOPROC_SUCCESS;
 }
 
@@ -173,262 +287,180 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
 	return GEOPROC_SUCCESS;
 }
 
-void GeometryProcessor::GetIntersectGroups(
-	TArray<TArray<TriMesh*>>& Groups,
-	TArray<TriMesh>& InMeshes
-) {
-	const int InMeshCt = InMeshes.Num();
-	TArray<int> GroupIndices;
-	GroupIndices.Init(-1, InMeshCt);
-	
-	TArray<int> PotentialIntersectIndices;
-	TArray<int> IntersectIndices;
-	for (int i = 0; i < InMeshCt - 1; i++) {
-		TriMesh& TMeshA = InMeshes[i];
-		
-		// if the TMesh already belongs to a group, get the group, otherwise make a group
-		int GrpIndex = GroupIndices[i];
-		if (GrpIndex == -1) {
-			GrpIndex = Groups.Add(TArray<TriMesh*>());
-			GroupIndices[i] = GrpIndex;
+void GeometryProcessor::FlagTrisWithBV(TArray<TriMesh*>& TMeshes) {
+	for (int j = 0; j < TMeshes.Num(); j++) {
+		TriMesh& TMesh = *TMeshes[j];
+		if (!Geometry::IsBoxAInBoxB(TMesh.Box, Data::BoundsVolumeTMesh.Box)) {
+			Geometry::FlagTriVerticesInsideBoundsVolume(TMesh);
 		}
-		
-		// check forward for bbox overlaps
-		for (int j = i + 1; j < InMeshCt; j++) {
-			const int& OtherGrpIndex = GroupIndices[j];
-			// if TMeshA and TMeshB are already grouped, no need to check overlap
-			if (OtherGrpIndex == GrpIndex) {
-				continue;
-			}
-			TriMesh& TMeshB = InMeshes[j];
-			if (Geometry::DoBoundingBoxesOverlap(TMeshA.Box, TMeshB.Box)) {
-				PotentialIntersectIndices.Add(j);
-			}
-		}
-
-		// populate group indices array with indices of mesh intersections
-		if(Geometry::GetTriMeshIntersectGroups(IntersectIndices, PotentialIntersectIndices, TMeshA, InMeshes)) {
-			for (int j = 0; j < IntersectIndices.Num(); j++) {
-				const int& IndexOfOverlap = IntersectIndices[j];
-				const int OverlapGrpIndex = GroupIndices[IndexOfOverlap];
-				// merge groups if overlapping TMesh belongs to a different group (already checked if in same group)
-				if (OverlapGrpIndex == -1) {
-					GroupIndices[IndexOfOverlap] = GrpIndex;
-				}
-				else {
-					for (int m = 0; m < InMeshCt; m++) {
-						if (GroupIndices[m] == OverlapGrpIndex) {
-							GroupIndices[m] = GrpIndex;
-						}	
-					}
-				}
-			}	
-		}
-
-		PotentialIntersectIndices.Empty(InMeshCt);
-		IntersectIndices.Empty(InMeshCt);
-	}
-	// the very last mesh may be an island (no overlaps)
-	const int EndIndex = InMeshCt - 1;
-	if (GroupIndices[EndIndex] == -1) {
-		GroupIndices[EndIndex] = Groups.Add(TArray<TriMesh*>());
-	}
-
-	// populate groups with known group indices
-	for (int i = 0; i < InMeshCt; i++) {
-		const int& GrpIndex = GroupIndices[i];
-		Groups[GrpIndex].Add(&InMeshes[i]);
-	}
-}
-
-void GeometryProcessor::FlagOutsideTris(TArray<TArray<TriMesh*>>& Groups) {
-	for (int i = 0; i < Groups.Num(); i++) {
-		TArray<TriMesh*>& Group = Groups[i];
-		for (int j = 0; j < Group.Num(); j++) {
-			TriMesh& TMesh = *Group[j];
-			if (!Geometry::IsBoxAInBoxB(TMesh.Box, Data::BoundsVolumeTMesh.Box)) {
-				Geometry::FlagTriVerticesInsideBoundsVolume(TMesh);
-			}
-			else {
-				auto& Grid = TMesh.Grid;
-				for (int k = 0; k < Grid.Num(); k++) {
-					Tri& T = Grid[k];
-					T.SetInsideBV();
-				}
+		else {
+			auto& Grid = TMesh.Grid;
+			for (int k = 0; k < Grid.Num(); k++) {
+				Tri& T = Grid[k];
+				T.SetInsideBV();
 			}
 		}
 	}
 }
 
 void GeometryProcessor::BuildPolygonsAtMeshIntersections(
-	TArray<TArray<TriMesh*>>& Groups,
-	TArray<TArray<TArray<Polygon>>>& AllPolygons
+	TArray<TriMesh*>& Group,
+	TArray<TArray<Polygon>>& GroupPolygons,
+	FCriticalSection* Mutex
 ) {
-	auto& Grid = Data::BoundsVolumeTMesh.Grid;
+	const auto& Grid = Data::BoundsVolumeTMesh.Grid;
 	for (int i = 0; i < Grid.Num(); i++) {
 		Grid[i].Normal = -Grid[i].Normal;
 	}
-	for (int i = 0; i < Groups.Num(); i++) {
-		TArray<TriMesh*>& Group = Groups[i];
-		TArray<TArray<UnstructuredPolygon>> UPolys;
-		AllPolygons.Add(TArray<TArray<Polygon>>());
-		TArray<TArray<Polygon>>& GroupPolygons = AllPolygons.Last();
+	
+	TArray<TArray<UnstructuredPolygon>> UPolys;
 
-		// slipping the bounds volume tmesh into the group so it creates intersections with other meshes
-		Group.Add(&Data::BoundsVolumeTMesh);
-		const int GroupCt = Group.Num();
-		for (int j = 0; j < GroupCt; j++) {
-			UPolys.Add(TArray<UnstructuredPolygon>());
-			TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
-			// creating an unstructured polygon per tri
-			MeshUPolys.Init(UnstructuredPolygon(), Group[j]->Grid.Num());
-		}
+	// slipping the bounds volume tmesh into the group so it creates intersections with other meshes
+	Group.Add(&Data::BoundsVolumeTMesh);
+	const int GroupCt = Group.Num();
+	for (int j = 0; j < GroupCt; j++) {
+		UPolys.Add(TArray<UnstructuredPolygon>());
+		TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
+		// creating an unstructured polygon per tri
+		MeshUPolys.Init(UnstructuredPolygon(), Group[j]->Grid.Num());
+	}
 
-		// get mesh intersections between meshes, including Bounds Volume
-		Geometry::FindIntersections(Group, UPolys, true);
+	// get mesh intersections between meshes, including Bounds Volume
+	Geometry::FindIntersections(Group, UPolys, true);
 
-		// removing the bounds volume tmesh since we don't care what intersections landed on it
-		Group.RemoveAt(GroupCt - 1);
-		UPolys.RemoveAt(GroupCt - 1);
+	// removing the bounds volume tmesh since we don't care what intersections landed on it
+	Group.RemoveAt(GroupCt - 1);
+	UPolys.RemoveAt(GroupCt - 1);
+	
+	for (int j = 0; j < UPolys.Num(); j++) {
+		TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
+		TriMesh& TMesh = *Group[j];
+		GroupPolygons.Add(TArray<Polygon>());
+		TArray<Polygon>& TMeshPolygons = GroupPolygons.Last();
 		
-		for (int j = 0; j < UPolys.Num(); j++) {
-			TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
-			TriMesh& TMesh = *Group[j];
-			GroupPolygons.Add(TArray<Polygon>());
-			TArray<Polygon>& TMeshPolygons = GroupPolygons.Last();
-			
-			for (int k = 0; k < MeshUPolys.Num(); k++) {
-				Tri& T = TMesh.Grid[k];
+		for (int k = 0; k < MeshUPolys.Num(); k++) {
+			Tri& T = TMesh.Grid[k];
 
-				TArray<UPolyNode> PolygonNodes;
-				if (T.IsCull()) {
-					// Tris are marked for cull early if they fall outside of the bounds box
-					continue;
+			TArray<UPolyNode> PolygonNodes;
+			if (T.IsCull()) {
+				// Tris are marked for cull early if they fall outside of the bounds box
+				continue;
+			}
+			const UnstructuredPolygon& UPoly = MeshUPolys[k];
+			if (UPoly.Edges.Num() == 0) {
+				// if there are no intersections...
+				if (T.AllObscured()) {
+					// ...and all vertices are obscured, tri is enclosed -> cull
+					T.MarkForCull();
 				}
-				const UnstructuredPolygon& UPoly = MeshUPolys[k];
-				if (UPoly.Edges.Num() == 0) {
-					// if there are no intersections...
-					if (T.AllObscured()) {
-						// ...and all vertices are obscured, tri is enclosed -> cull
-						T.MarkForCull();
-					}
-					else if (T.AnyObscured()) {
-						// ... and 0 < n < 3 of the vertices are obscured, something has gone wrong
-						T.MarkProblemCase();
-						T.MarkForCull();
-						Data::FailureCaseTris.Add(T);
-					}	
-					continue;
-				}
-
-				UNavDbg::BreakOnVertexCaptureMatch(T);
-				
-				// creating graphs where edges (intersections and tri edges) connect, and where they're visible
-				PopulateNodes(T, UPoly, PolygonNodes);
-				
-				Polygonize(T, PolygonNodes, TMeshPolygons, k);
-				
-				// TODO: each tri might come out with more than one polygon; for example, a set of intersections in the center...
-				// TODO: ... of the tri that do not touch tri edges - one outside, one inside; but, we start with one...
-				// TODO: ... add if ever touches edge, else subtract unless enclosed by subtract polygon
-				if (T.IsCull() || T.IsProblemCase()) {
+				else if (T.AnyObscured()) {
+					// ... and 0 < n < 3 of the vertices are obscured, something has gone wrong
+					T.MarkProblemCase();
+					T.MarkForCull();
 					Data::FailureCaseTris.Add(T);
-				}
+				}	
+				continue;
+			}
+
+			UNavDbg::BreakOnVertexCaptureMatch(T);
+			
+			// creating graphs where edges (intersections and tri edges) connect, and where they're visible
+			PopulateNodes(T, UPoly, PolygonNodes);
+			
+			Polygonize(T, PolygonNodes, TMeshPolygons, k);
+			
+			// TODO: each tri might come out with more than one polygon; for example, a set of intersections in the center...
+			// TODO: ... of the tri that do not touch tri edges - one outside, one inside; but, we start with one...
+			// TODO: ... add if ever touches edge, else subtract unless enclosed by subtract polygon
+			if (T.IsCull() || T.IsProblemCase()) {
+				Data::FailureCaseTris.Add(T);
 			}
 		}
 	}
-	for (auto& GroupPolygons : AllPolygons) {
-		for (auto& MeshPolygons : GroupPolygons) {
-			for (auto& Polygon : MeshPolygons) {
-				LinkPolygonEdges(Polygon);
-			}
-		}	
-	}
+	for (auto& MeshPolygons : GroupPolygons) {
+		for (auto& Polygon : MeshPolygons) {
+			LinkPolygonEdges(Polygon);
+		}
+	}	
 }
 
-void GeometryProcessor::FormMeshesFromGroups(
-	TArray<TArray<TriMesh*>>& Groups,
-	TArray<TArray<TArray<Polygon>>>& Polygons,
-	TArray<UNavMesh>& NavMeshes
+void GeometryProcessor::FormMeshFromGroup(
+	TArray<TriMesh*>& Group,
+	TArray<TArray<Polygon>>& Polygons,
+	UNavMesh* NMesh,
+	FCriticalSection* Mutex
 ) {
-	for (int i = 0; i < Groups.Num(); i++) {
-		const auto& Group = Groups[i];
+	// reserving space for temp tris and verts
+	int TriCt = 0;
+	int VertexCt = 0;
+	for (const auto& TMesh : Group) {
+		TriCt += TMesh->Grid.Num();
+		VertexCt += TMesh->VertexCt;
+	}
 
-		// reserving space for temp tris and verts
-		int TriCt = 0;
-		int VertexCt = 0;
-		for (auto& TMesh : Group) {
-			TriCt += TMesh->Grid.Num();
-			VertexCt += TMesh->VertexCt;
-		}
+	// populating these data with Tris that are not changing
+	TArray<FIntVector> UnchangedTriVertexIndices;
+	UnchangedTriVertexIndices.Reserve(TriCt);
+	TArray<FVector*> UnchangedVertices;
+	UnchangedVertices.Reserve(VertexCt);
+	PopulateUnmarkedTriData(Group, UnchangedVertices, UnchangedTriVertexIndices);
 
-		// populating these data with Tris that are not changing
-		TArray<FIntVector> UnchangedTriVertexIndices;
-		UnchangedTriVertexIndices.Reserve(TriCt);
-		TArray<FVector*> UnchangedVertices;
-		UnchangedVertices.Reserve(VertexCt);
-		PopulateUnmarkedTriData(Group, UnchangedVertices, UnchangedTriVertexIndices);
+	// populating these data with Tris formed from new polygons
+	TArray<FIntVector> NewTriVertexIndices;
+	NewTriVertexIndices.Reserve((int)(TriCt * 0.2f)); // just guessing how much space to reserve here
+	TArray<FVector> NewVertices;
+	NewVertices.Reserve((int)(VertexCt * 0.2f));
+	TArray<FVector*> Normals;
+	for (int j = 0; j < Polygons.Num(); j++) {
+		auto& MeshPolygons = Polygons[j];
+		Triangulize(MeshPolygons, NewVertices, NewTriVertexIndices, Normals);
+	}
 
-		// populating these data with Tris formed from new polygons
-		TArray<FIntVector> NewTriVertexIndices;
-		NewTriVertexIndices.Reserve((int)(TriCt * 0.2f)); // just guessing how much space to reserve here
-		TArray<FVector> NewVertices;
-		NewVertices.Reserve((int)(VertexCt * 0.2f));
-		TArray<TArray<Polygon>>& GroupPolygons = Polygons[i];
-		TArray<FVector*> Normals;
-		for (int j = 0; j < GroupPolygons.Num(); j++) {
-			auto& MeshPolygons = GroupPolygons[j];
-			Triangulize(MeshPolygons, NewVertices, NewTriVertexIndices, Normals);
-		}
+	// making new vertex buffer
+	const int UnchangedVertexCt = UnchangedVertices.Num();
+	const int NewVertexCt = NewVertices.Num();
+	const int NewVertCt = UnchangedVertexCt + NewVertexCt;
+	FVector* NewVertexBuffer = new FVector[NewVertCt];
+	if (NewVertexBuffer == nullptr) {
+		return;
+	}
+	for (int j = 0; j < UnchangedVertexCt; j++) {
+		NewVertexBuffer[j] = *UnchangedVertices[j];
+	}
+	if (NewVertexCt > 0) {
+		memcpy(NewVertexBuffer + UnchangedVertexCt, NewVertices.GetData(), NewVertexCt * sizeof(FVector));
+	}
 
-		// making new vertex buffer
-		const int UnchangedVertexCt = UnchangedVertices.Num();
-		const int NewVertexCt = NewVertices.Num();
-		const int NewVertCt = UnchangedVertexCt + NewVertexCt;
-		FVector* NewVertexBuffer = new FVector[NewVertCt];
-		if (NewVertexBuffer == nullptr) {
-			continue;
-		}
-		for (int j = 0; j < UnchangedVertexCt; j++) {
-			NewVertexBuffer[j] = *UnchangedVertices[j];
-		}
-		if (NewVertexCt > 0) {
-			memcpy(NewVertexBuffer + UnchangedVertexCt, NewVertices.GetData(), NewVertexCt * sizeof(FVector));
-		}
+	// making temp tri buffer
+	TArray<TempTri> NewTris;
+	for (int j = 0; j < UnchangedTriVertexIndices.Num(); j++) {
+		const FIntVector& VertexIndices = UnchangedTriVertexIndices[j];
+		NewTris.Add(TempTri(
+			&NewVertexBuffer[VertexIndices.X],
+			&NewVertexBuffer[VertexIndices.Y],
+			&NewVertexBuffer[VertexIndices.Z]
+		));
+	}
+	for (int j = 0; j < NewTriVertexIndices.Num(); j++) {
+		const FIntVector& VertexIndices = NewTriVertexIndices[j];
+		NewTris.Add(TempTri(
+			&NewVertexBuffer[VertexIndices.X + UnchangedVertexCt],
+			&NewVertexBuffer[VertexIndices.Y + UnchangedVertexCt],
+			&NewVertexBuffer[VertexIndices.Z + UnchangedVertexCt],
+			Normals[j]
+		));
+	}
 
-		// making temp tri buffer
-		TArray<TempTri> NewTris;
-		for (int j = 0; j < UnchangedTriVertexIndices.Num(); j++) {
-			const FIntVector& VertexIndices = UnchangedTriVertexIndices[j];
-			NewTris.Add(TempTri(
-				&NewVertexBuffer[VertexIndices.X],
-				&NewVertexBuffer[VertexIndices.Y],
-				&NewVertexBuffer[VertexIndices.Z]
-			));
-		}
-		for (int j = 0; j < NewTriVertexIndices.Num(); j++) {
-			const FIntVector& VertexIndices = NewTriVertexIndices[j];
-			NewTris.Add(TempTri(
-				&NewVertexBuffer[VertexIndices.X + UnchangedVertexCt],
-				&NewVertexBuffer[VertexIndices.Y + UnchangedVertexCt],
-				&NewVertexBuffer[VertexIndices.Z + UnchangedVertexCt],
-				Normals[j]
-			));
-		}
-
-		// init navmesh
-		NavMeshes.Add(UNavMesh());
-		UNavMesh& NavMesh = NavMeshes.Last();
-		NavMesh.Vertices = NewVertexBuffer;
-		NavMesh.VertexCt = NewVertCt;
-		Geometry::SetBoundingBox(NavMesh, Group);
-		NavMesh.Grid.Init(NavMesh, NewTris);
-		NavMesh.Grid.SetVertices(NewVertexBuffer);
-		for (auto& TMesh : Group) {
-			NavMesh.MeshActors.Add(TMesh->MeshActor);	
-		}
+	// init navmesh
+	NMesh->Vertices = NewVertexBuffer;
+	NMesh->VertexCt = NewVertCt;
+	Geometry::SetBoundingBox(*NMesh, Group);
+	NMesh->Grid.Init(*NMesh, NewTris);
+	NMesh->Grid.SetVertices(NewVertexBuffer);
+	for (const auto& TMesh : Group) {
+		NMesh->MeshActors.Add(TMesh->MeshActor);	
+	}
 		
-	}	
 }
 
 void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& UPoly, TArray<UPolyNode>& PolygonNodes) {

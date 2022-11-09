@@ -1,6 +1,5 @@
 ﻿#include "PathFinder.h"
 
-
 FPathFinder::FPathFinder() :
 	IsThreadRun(false)
 {}

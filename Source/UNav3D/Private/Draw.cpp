@@ -63,15 +63,7 @@ void ADraw::AddNavMesh(UNavMesh& NMesh) {
 	const auto& Grid = NMesh.Grid;
 	for (int j = 0; j < Grid.Num(); j++) {
 		Grid.GetIndices(j, Triangle);
-		Tri& T = Grid[j];
-		
-		// TODO: do this in GeometryProcessor
-		// T.CalculateNormal(CalculatedNormal);
-		// if (FVector::DotProduct(T.Normal, CalculatedNormal) <= 0.0f) {
-		// 	const uint32 TempC = Triangle[0];
-		// 	Triangle[0] = Triangle[2];
-		// 	Triangle[2] = TempC;
-		// }
+		const Tri& T = Grid[j];
 		
 		Triangles.Append(Triangle);
 		for (int k = 0; k < Triangle.Num(); k++) {

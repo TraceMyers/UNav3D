@@ -1,22 +1,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GeometryProcessor.h"
-#include "Debug.h"
-
-// TODO: UNav3D should have no private includes
-// NOTE: vertices that are too close together will likely break this plugin
-// NOTE: will require editor utility scripting plugin
-
-#define LOCTEXT_NAMESPACE "UNav3D"
-#define UNAV_GENMSG(x) \
-	FMessageDialog::Open( \
-		EAppMsgType::Ok, FText::Format(LOCTEXT("UNav3D", "UNAV3D Message: {0}", FText::FromString(x)) \
-	);
-#define UNAV_GENERR(x) \
-	FMessageDialog::Open( \
-		EAppMsgType::Ok, FText::Format(LOCTEXT("UNav3D", "UNAV3D ERROR: {0}"), FText::FromString(x)) \
-	);
 
 class FToolBarBuilder;
 class FMenuBuilder;
@@ -38,26 +22,6 @@ private:
 
 	void RegisterMenus();
 
-	// Finds bounds volume in editor viewport; returns false if number of bounds volumes is not 1
-	bool SetBoundsVolume(const UWorld* World) const;
-
-	// Takes meshes found inside bounds volume and populates TriMeshes with their data
-	bool PopulateTriMeshes(TArray<TriMesh>& TriMeshes) const;
-
-	// Advance the progress bar
-	void EnterProgressFrame(FScopedSlowTask& Task, const char* msg) const;
-
-#ifdef UNAV_DEV
-	// Sets the bounds volumes of all vertex captures in the world and adds them to the TArray in Data
-	void InitVertexCaptures(const UWorld* World) const;
-#endif
-	
 	TSharedPtr<FUICommandList> PluginCommands;
-	GeometryProcessor GeomProcessor;
-	
-	bool Initialized = false;
-	const int TotalTasks = 2;
 	
 };
-
-#undef LOCTEXT_NAMESPACE

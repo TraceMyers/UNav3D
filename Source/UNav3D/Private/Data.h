@@ -33,5 +33,5 @@ namespace Data {
 		BoundsVolumeTMesh.ResetVertexData();
 		VertexCaptures.Empty();
 	}
-	
+
 }

@@ -251,3 +251,8 @@ void UNavDbg::DrawSavedLines(const UWorld* World) {
 		DrawDebugLine(World, LineA[i], LineB[i], FColor::Blue, false, DBG_DRAW_TIME, 0, 1.0f);
 	}
 }
+
+void UNavDbg::PrintThreadSuccess(FCriticalSection* Mutex) {
+	FScopeLock Lock(Mutex);
+	printf("Thread success\n");
+}

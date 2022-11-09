@@ -1017,9 +1017,6 @@ namespace Geometry {
 			if (!T.AnyInsideBV()) {
 				T.MarkForCull();
 			}
-			else if (!T.IsInsideBV()) {
-				T.SetIOs();
-			}
 		}
 	}
 
