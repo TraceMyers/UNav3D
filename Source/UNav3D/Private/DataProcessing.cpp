@@ -77,18 +77,17 @@ namespace {
 	}
 
 	int GProcWaitForAvailable(float WaitSeconds) {
-		constexpr int WAIT_MS = 100;
+		constexpr int WAIT_MS = 10;
 		constexpr float WAIT_DELTA = WAIT_MS * 1e-3f;
 		
-		for (float WaitCtr = 0.0f; WaitCtr < WaitSeconds; ) {
+		for (float WaitCtr = 0.0f; WaitCtr < WaitSeconds; WaitCtr += WAIT_DELTA) {
 			for (int i = 0; i < MaxRunningThreadCt; i++) {
 				if (IsGProcTAvail[i]) {
 					GProcThreads[i]->StopThread();
 					return i;
 				}
-				std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_MS));
-				WaitCtr += WAIT_DELTA;
 			}
+            std::this_thread::sleep_for(std::chrono::milliseconds(WAIT_MS));
 		}
 		return WAIT_FAILURE;
 	}
