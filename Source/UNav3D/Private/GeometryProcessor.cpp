@@ -316,7 +316,7 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 	TArray<TArray<UnstructuredPolygon>> UPolys;
 
 	// slipping the bounds volume tmesh into the group so it creates intersections with other meshes
-	Group.Add(&Data::BoundsVolumeTMesh);
+	// Group.Add(&Data::BoundsVolumeTMesh);
 	const int GroupCt = Group.Num();
 	for (int j = 0; j < GroupCt; j++) {
 		UPolys.Add(TArray<UnstructuredPolygon>());
@@ -326,11 +326,11 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 	}
 
 	// get mesh intersections between meshes, including Bounds Volume
-	Geometry::FindIntersections(Group, UPolys, true);
+	Geometry::FindIntersections(Group, UPolys, false);
 
 	// removing the bounds volume tmesh since we don't care what intersections landed on it
-	Group.RemoveAt(GroupCt - 1);
-	UPolys.RemoveAt(GroupCt - 1);
+	// Group.RemoveAt(GroupCt - 1);
+	// UPolys.RemoveAt(GroupCt - 1);
 	
 	for (int j = 0; j < UPolys.Num(); j++) {
 		TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
@@ -352,18 +352,19 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 				if (T.AllObscured()) {
 					// ...and all vertices are obscured, tri is enclosed -> cull
 					T.MarkForCull();
+					FScopeLock Lock(Mutex);
+					Data::FailureCaseTris.Add(&T);
 				}
 				else if (T.AnyObscured()) {
 					// ... and 0 < n < 3 of the vertices are obscured, something has gone wrong
 					T.MarkProblemCase();
 					T.MarkForCull();
-					Data::FailureCaseTris.Add(T);
+					FScopeLock Lock(Mutex);
+					Data::FailureCaseTris.Add(&T);
 				}	
 				continue;
 			}
 
-			UNavDbg::BreakOnVertexCaptureMatch(T);
-			
 			// creating graphs where edges (intersections and tri edges) connect, and where they're visible
 			PopulateNodes(T, UPoly, PolygonNodes);
 			
@@ -373,7 +374,8 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 			// TODO: ... of the tri that do not touch tri edges - one outside, one inside; but, we start with one...
 			// TODO: ... add if ever touches edge, else subtract unless enclosed by subtract polygon
 			if (T.IsCull() || T.IsProblemCase()) {
-				Data::FailureCaseTris.Add(T);
+				FScopeLock Lock(Mutex);
+				Data::FailureCaseTris.Add(&T);
 			}
 		}
 	}
@@ -471,8 +473,8 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 	
 	for (int i = 0; i < Edges.Num(); i++) {
 		const PolyEdge& PEdge = Edges[i];
-		const TArray<float> PtDistances = PEdge.TrDropDistances;
-		if (PtDistances.Num() == 0) {
+		const TArray<FVector>& ObscuredLocations = PEdge.ObscuredLocations;
+		if (ObscuredLocations.Num() == 0) {
 			// if A is not enclosed here, so is B, so create 2 nodes. if both enclosed, create none.
 			if (!PEdge.IsAEnclosed()) {
 				AddUPolyNodes(PolygonNodes, PEdge.A, PEdge.B, AddedNodes);
@@ -489,11 +491,10 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 		// NOTE: would be faster but much more data loaded at once to just store positions rather than distances
 		FVector StartLoc;
 		int start_j;
-		const FVector Dir = (PEdge.B - PEdge.A).GetUnsafeNormal();
-		const int PtDistCt = PtDistances.Num();
+		const int PtDistCt = ObscuredLocations.Num();
 		
 		if (PEdge.IsAEnclosed()) {
-			StartLoc = PEdge.A + Dir * PtDistances[0];
+			StartLoc = ObscuredLocations[0];
 			if (PtDistCt == 1) {
 				AddUPolyNodes(PolygonNodes, StartLoc, PEdge.B, AddedNodes);
 				continue;	
@@ -506,12 +507,12 @@ void GeometryProcessor::PopulateNodes(const Tri& T, const UnstructuredPolygon& U
 		}
 
 		for (int j = start_j; ; ) {
-			FVector EndLoc = PEdge.A + Dir * PtDistances[j];
+			FVector EndLoc = ObscuredLocations[j];
 			AddUPolyNodes(PolygonNodes, StartLoc, EndLoc, AddedNodes);
 			if (++j == PtDistCt) {
 				break;		
 			}
-			StartLoc = PEdge.A + Dir * PtDistances[j];
+			StartLoc = ObscuredLocations[j];
 			if (++j == PtDistCt) {
 				AddUPolyNodes(PolygonNodes, StartLoc, PEdge.B, AddedNodes);
 				break;

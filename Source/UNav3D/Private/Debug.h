@@ -58,6 +58,8 @@ namespace UNavDbg {
 	void DrawNavMeshNormals(const UWorld* World, const UNavMesh& NMesh);
 
 	void DrawTris(const UWorld* World, const TArray<Tri>& Tris, FColor Color=FColor::Red);
+	
+	void DrawTris(const UWorld* World, const TArray<Tri*>& Tris, FColor Color=FColor::Red);
 
 	void DrawPolygons(const UWorld* World, const TArray<Polygon>& Polygons, FColor Color=FColor::Magenta);
 

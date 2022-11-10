@@ -61,7 +61,7 @@ struct PolyEdge {
 	const FVector A;
 	const FVector B;
 	uint32 Flags; // only using 2 of the 4 bytes
-	TArray<float> TrDropDistances; // distances from A (toward B) marking where this edge passes in and out of other meshes
+	TArray<FVector> ObscuredLocations; // locations from A (toward B) marking where this edge passes in and out of other meshes
 };
 
 

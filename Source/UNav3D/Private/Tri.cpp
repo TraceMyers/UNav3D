@@ -1,6 +1,8 @@
 ﻿#include "Tri.h"
 #include <utility>
 
+// flag if tri edge trace points inside box
+
 namespace {
 	
 	enum TRI_FLAGS {

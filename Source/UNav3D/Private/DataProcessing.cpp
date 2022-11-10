@@ -149,22 +149,32 @@ namespace {
 	}
 
 	bool ReformTriMeshes(TArray<TArray<TriMesh*>> Groups) {
+		// TODO: use arrayviews for nonoverlapping permutations of subgroups per thread
+		// TODO: ... use tri count budget to determine num in subgroup
+
+		// NOTE: the number of tri going in will be between 3*grpsiz and 3 * tri budget - 3*(grpsiz+1) (right?)
+		// tri budget should be dependent the average tri ct per group, with minimum to justify thread overhead
+		// no need to wait at the end of each group, since group a work is totally nonoverlapping with group b work
 		Data::NMeshes.Init(UNavMesh(), Groups.Num());
-		for (int i = 0; i < Groups.Num(); i++) {
-			const int Avail = GProcWaitForAvailable(200.0f);
-			if (Avail < 0) {
-				return false;	
-			}
-			GProcThreads[Avail]->InitReformTMesh(&Groups[i], &Data::NMeshes[i]);
-			IsGProcTAvail[Avail].AtomicSet(false);
-			if (!TryStartThread(FGeoProcThread::GEOPROC_REFORM_TRIMESH, Avail)) {
-				IsGProcTAvail[Avail].AtomicSet(true);
-			}
+		// for (int i = 0; i < Groups.Num(); i++) {
+		// 	const int Avail = GProcWaitForAvailable(200.0f);
+		// 	if (Avail < 0) {
+		// 		return false;	
+		// 	}
+		// 	GProcThreads[Avail]->InitReformTMesh(&Groups[i], &Data::NMeshes[i]);
+		// 	IsGProcTAvail[Avail].AtomicSet(false);
+		// 	if (!TryStartThread(FGeoProcThread::GEOPROC_REFORM_TRIMESH, Avail)) {
+		// 		IsGProcTAvail[Avail].AtomicSet(true);
+		// 	}
+		// }
+		// if (GProcWaitForAll(200.0f) == WAIT_SUCCESS) {
+		// 	return true;
+		// }
+		FThreadSafeBool B(true);
+		for (int i = 0; i <Groups.Num(); i++) {
+			GProc.ReformTriMesh(&Groups[i], &DataProcMutex, &B, &Data::NMeshes[i]);
 		}
-		if (GProcWaitForAll(200.0f) == WAIT_SUCCESS) {
-			return true;
-		}
-		return false;
+		return true;
 	}
 
 	// Advance the progress bar
@@ -249,19 +259,16 @@ void DataProcessing::TotalReload() {
 	Task.MakeDialog(false);
 	
 	EnterProgressFrame(Task, "getting static mesh data");
-	TArray<TriMesh> TMeshes;
-	if (!PopulateTriMeshes(TMeshes)) {
-		Data::Reset();
+	if (!PopulateTriMeshes(Data::TMeshes)) {
 		return;
 	}
 
 	EnterProgressFrame(Task, "grouping meshes by intersection");
 	TArray<TArray<TriMesh*>> TMeshGroups;
-	GProc.GroupTriMeshes(TMeshes, TMeshGroups);
+	GProc.GroupTriMeshes(Data::TMeshes, TMeshGroups);
 	
 	EnterProgressFrame(Task, "reforming meshes");
 	if (!ReformTriMeshes(TMeshGroups)) {
-		Data::Reset();
 		return;
 	}
 
