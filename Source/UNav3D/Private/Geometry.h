@@ -53,13 +53,10 @@ namespace Geometry {
 	void FlagTriVerticesInsideBoundsVolume(const TriMesh& TMesh);
 
 	// find all intersections between tris and create a picture of where each tri is inside and where it's outside
-	// other meshes; if 'inside' edges connect, they form polygons. If LastIsBoundsVolume==true, the bounds volume
-	// will be excluded in the calculation of the bounding box of the group, which can improve accuracy when the
-	// group is smaller than the box
+	// other meshes; if 'inside' edges connect, they form polygons. Assumes the bounds volume is the last member of group
 	void FindIntersections(
 		TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
-		bool LastIsBoundsVolume=false
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys
 	);
 
 	// Does P (roughly) lie on/inside Triangle ABC?

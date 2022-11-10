@@ -156,24 +156,24 @@ namespace {
 		// tri budget should be dependent the average tri ct per group, with minimum to justify thread overhead
 		// no need to wait at the end of each group, since group a work is totally nonoverlapping with group b work
 		Data::NMeshes.Init(UNavMesh(), Groups.Num());
-		// for (int i = 0; i < Groups.Num(); i++) {
-		// 	const int Avail = GProcWaitForAvailable(200.0f);
-		// 	if (Avail < 0) {
-		// 		return false;	
-		// 	}
-		// 	GProcThreads[Avail]->InitReformTMesh(&Groups[i], &Data::NMeshes[i]);
-		// 	IsGProcTAvail[Avail].AtomicSet(false);
-		// 	if (!TryStartThread(FGeoProcThread::GEOPROC_REFORM_TRIMESH, Avail)) {
-		// 		IsGProcTAvail[Avail].AtomicSet(true);
-		// 	}
-		// }
-		// if (GProcWaitForAll(200.0f) == WAIT_SUCCESS) {
-		// 	return true;
-		// }
-		FThreadSafeBool B(true);
-		for (int i = 0; i <Groups.Num(); i++) {
-			GProc.ReformTriMesh(&Groups[i], &DataProcMutex, &B, &Data::NMeshes[i]);
+		for (int i = 0; i < Groups.Num(); i++) {
+			const int Avail = GProcWaitForAvailable(200.0f);
+			if (Avail < 0) {
+				return false;	
+			}
+			GProcThreads[Avail]->InitReformTMesh(&Groups[i], &Data::NMeshes[i]);
+			IsGProcTAvail[Avail].AtomicSet(false);
+			if (!TryStartThread(FGeoProcThread::GEOPROC_REFORM_TRIMESH, Avail)) {
+				IsGProcTAvail[Avail].AtomicSet(true);
+			}
 		}
+		if (GProcWaitForAll(200.0f) == WAIT_SUCCESS) {
+			return true;
+		}
+		// FThreadSafeBool B(true);
+		// for (int i = 0; i <Groups.Num(); i++) {
+		// 	GProc.ReformTriMesh(&Groups[i], &DataProcMutex, &B, &Data::NMeshes[i]);
+		// }
 		return true;
 	}
 

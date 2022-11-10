@@ -316,7 +316,7 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 	TArray<TArray<UnstructuredPolygon>> UPolys;
 
 	// slipping the bounds volume tmesh into the group so it creates intersections with other meshes
-	// Group.Add(&Data::BoundsVolumeTMesh);
+	Group.Add(&Data::BoundsVolumeTMesh);
 	const int GroupCt = Group.Num();
 	for (int j = 0; j < GroupCt; j++) {
 		UPolys.Add(TArray<UnstructuredPolygon>());
@@ -326,11 +326,11 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 	}
 
 	// get mesh intersections between meshes, including Bounds Volume
-	Geometry::FindIntersections(Group, UPolys, false);
+	Geometry::FindIntersections(Group, UPolys);
 
-	// removing the bounds volume tmesh since we don't care what intersections landed on it
-	// Group.RemoveAt(GroupCt - 1);
-	// UPolys.RemoveAt(GroupCt - 1);
+	// removing the bounds volume upolys since we don't care what intersections landed on it;
+	Group.RemoveAt(GroupCt - 1);
+	UPolys.RemoveAt(GroupCt - 1);
 	
 	for (int j = 0; j < UPolys.Num(); j++) {
 		TArray<UnstructuredPolygon>& MeshUPolys = UPolys[j];
@@ -352,8 +352,6 @@ void GeometryProcessor::BuildPolygonsAtMeshIntersections(
 				if (T.AllObscured()) {
 					// ...and all vertices are obscured, tri is enclosed -> cull
 					T.MarkForCull();
-					FScopeLock Lock(Mutex);
-					Data::FailureCaseTris.Add(&T);
 				}
 				else if (T.AnyObscured()) {
 					// ... and 0 < n < 3 of the vertices are obscured, something has gone wrong

@@ -114,6 +114,18 @@ namespace Geometry {
 				}
 			}
 
+			void ResetBV1() {
+				for (int i = 0; i < Keys.Num(); i++) {
+					auto Key = Keys[i];
+					if (Key == Data::BoundsVolumeTMesh.MeshActor) {
+						MeshToCt[Key] = 1;
+					}
+					else {
+						MeshToCt[Key] = 0;
+					}
+				}
+			}
+
 		private:
 			
 			TMap<AStaticMeshActor*, int> MeshToCt;
@@ -457,13 +469,13 @@ namespace Geometry {
 				}
 			}
 		}
-
-		// Single mesh, single hit test version of other implementation
-		bool Internal_LineTraceThrough(
+		
+		// This version takes an array view instead of an array
+		void Internal_LineTraceThrough(
 			const FVector& TrStart,
 			const FVector& TrEnd,
-			const TriMesh& TMesh,
-			MeshHit& MHit
+			const TArrayView<TriMesh*>& TriMeshes,
+			TArray<MeshHit>& MHits
 		) {
 			const float TraceDistance = FVector::Dist(TrStart, TrEnd);
 			float HitDistance;
@@ -472,26 +484,25 @@ namespace Geometry {
 			const float Length = Dir.Size();
 			Dir *= 1 / Length;
 			const FVector OppDir = -Dir;
-			const AStaticMeshActor* MeshActor = TMesh.MeshActor;
-			const auto& Tris = TMesh.Grid;
-			for (int i = 0; i < Tris.Num(); i++) {
-				const Tri& T = Tris[i];
-				if (Internal_Raycast(TrStart, Dir, Length, T, PointOfIntersection, HitDistance)) {
-					MHit.SetData(MeshActor, PointOfIntersection, T.Normal, HitDistance);
-					return true;
-				}
-				if (Internal_Raycast(TrEnd, OppDir, Length, T, PointOfIntersection, HitDistance)) {
-					HitDistance = TraceDistance - HitDistance;
-					MHit.SetData(MeshActor, PointOfIntersection, T.Normal, HitDistance);
-					return true;
+			for (const TriMesh* TMesh : TriMeshes) {
+				const AStaticMeshActor* MeshActor = TMesh->MeshActor;
+				const auto& Tris = TMesh->Grid;
+				for (int i = 0; i < Tris.Num(); i++) {
+					const Tri& T = Tris[i];
+					if (Internal_Raycast(TrStart, Dir, Length, T, PointOfIntersection, HitDistance)) {
+						MHits.Add(MeshHit(MeshActor, PointOfIntersection, T.Normal, HitDistance));
+					}
+					if (Internal_Raycast(TrEnd, OppDir, Length, T, PointOfIntersection, HitDistance)) {
+						HitDistance = TraceDistance - HitDistance;
+						MHits.Add(MeshHit(MeshActor, PointOfIntersection, T.Normal, HitDistance));
+					}
 				}
 			}
-			return false;
 		}
-		
+
 		bool Internal_IsPointObscured(
 			const FVector& Pt,
-			const TArray<TriMesh*>& OtherMeshes,
+			const TArrayView<TriMesh*>& OtherMeshes,
 			float MinZ,
 			MeshHitCounter& MHitCtr
 		) {
@@ -524,7 +535,8 @@ namespace Geometry {
 			const TArray<TriMesh*>& OtherMeshes,
 			TArray<FVector>& ObscuredLocations,
 			float BBoxDiagDistance,
-			MeshHitCounter& MHitCtr
+			MeshHitCounter& MHitCtr,
+			bool BVIntersection=false
 		) {
 			FVector TrDir = (A - B);
 			const float ABLen = TrDir.Size();
@@ -537,10 +549,10 @@ namespace Geometry {
 			// sort by distance, farthest to shortest
 			MHits.Sort(MeshHit::DistCmp2);
 
-			MHitCtr.Reset();
-			if (OtherMeshes.Find(&Data::BoundsVolumeTMesh) != -1 && !IsPointInsideBox(Data::BoundsVolumeTMesh.Box, TrEnd)) {
-				MHitCtr.Add(Data::BoundsVolumeTMesh.MeshActor);		
-			}
+			MHitCtr.ResetBV1();
+			// if (OtherMeshes.Find(&Data::BoundsVolumeTMesh) != -1 && !IsPointInsideBox(Data::BoundsVolumeTMesh.Box, TrEnd)) {
+			// 	MHitCtr.Add(Data::BoundsVolumeTMesh.MeshActor);		
+			// }
 			
 			bool PassedA = false;
 			bool AEnclosed = false;
@@ -602,7 +614,7 @@ namespace Geometry {
 		// params should be set to complex and to ignore the mesh of the given tri; does NOT clear flags beforehand
 		bool Internal_IsTriObscured(
 			Tri& T,
-			const TArray<TriMesh*>& OtherMeshes,
+			const TArrayView<TriMesh*>& OtherMeshes,
 			float MinZ,
 			MeshHitCounter& MHitCtr
 		) {
@@ -747,98 +759,9 @@ namespace Geometry {
 			}
 		}
 
-		bool Internal_GetBoundsVolumePolyEdge(
-			Tri& T,
-			UnstructuredPolygon& UPoly,
-			const TArray<TriMesh*>& OtherMeshes,
-			float BBoxDiagDistance,
-			MeshHitCounter& MHitCtr
-		) {
-			const TriMesh& BV = Data::BoundsVolumeTMesh;
-			MeshHit HitA;
-			MeshHit HitB;
-			bool DidHitA = false;
-			bool DidHitB = false;
-			PolyEdge* TEdgeA = nullptr;
-			PolyEdge* TEdgeB = nullptr;
-			const int CAIndex = UPoly.Edges.Num() - 1;
-			if (T.IsAInsideBV()) {
-				if (T.IsBInsideBV()) {
-					// C enclosed
-					DidHitA = Internal_LineTraceThrough(T.C, T.A, BV, HitA);
-					DidHitB = Internal_LineTraceThrough(T.B, T.C, BV, HitB);
-					TEdgeA = &UPoly.Edges[CAIndex];
-					TEdgeB = &UPoly.Edges[CAIndex - 1];
-				}
-				else if (T.IsCInsideBV()) {
-					// B enclosed
-					DidHitA = Internal_LineTraceThrough(T.A, T.B, BV, HitA);
-					DidHitB = Internal_LineTraceThrough(T.B, T.C, BV, HitB);
-					TEdgeA = &UPoly.Edges[CAIndex - 2];
-					TEdgeB = &UPoly.Edges[CAIndex - 1];
-				}
-				else {
-					// B, C enclosed
-					DidHitA = Internal_LineTraceThrough(T.A, T.B, BV, HitA);
-					DidHitB = Internal_LineTraceThrough(T.C, T.A, BV, HitB);
-					TEdgeA = &UPoly.Edges[CAIndex - 2];
-					TEdgeB = &UPoly.Edges[CAIndex];
-				}
-			}
-			else if (T.IsBInsideBV()) {
-				if (T.IsCInsideBV()) {
-					// A enclosed
-					DidHitA = Internal_LineTraceThrough(T.A, T.B, BV, HitA);
-					DidHitB = Internal_LineTraceThrough(T.C, T.A, BV, HitB);
-					TEdgeA = &UPoly.Edges[CAIndex - 2];
-					TEdgeB = &UPoly.Edges[CAIndex];
-				}
-				else {
-					// C, A enclosed
-					DidHitA = Internal_LineTraceThrough(T.A, T.B, BV, HitA);
-					DidHitB = Internal_LineTraceThrough(T.B, T.C, BV, HitB);
-					TEdgeA = &UPoly.Edges[CAIndex - 2];
-					TEdgeB = &UPoly.Edges[CAIndex - 1];
-				}
-			}
-			else if (T.IsCInsideBV()) {
-				// A, B enclosed
-				DidHitA = Internal_LineTraceThrough(T.C, T.A, BV, HitA);
-				DidHitB = Internal_LineTraceThrough(T.B, T.C, BV, HitB);
-				TEdgeA = &UPoly.Edges[CAIndex];
-				TEdgeB = &UPoly.Edges[CAIndex - 1];
-			}
-			if (DidHitA && DidHitB) {
-				const uint32 Flags = 0x0f;
-				UPoly.Edges.Add(PolyEdge(HitA.Location, HitB.Location, Flags));
-				PolyEdge& Edge = UPoly.Edges.Last();
-				if (Internal_GetObscuredDistances(
-					HitA.Location,
-					HitB.Location,
-					OtherMeshes,
-					Edge.ObscuredLocations,
-					BBoxDiagDistance,
-					MHitCtr
-				)) {
-					Edge.SetAEnclosed();
-				}
-				// if this edge has a node that is enclosed, it shouldn't be added to the tri edge
-				// otherwise, add it
-				if (!Edge.IsAEnclosed()) {
-					TEdgeA->ObscuredLocations.Add(HitA.Location);
-				}
-				if (!Edge.IsBEnclosed()) {
-					TEdgeB->ObscuredLocations.Add(HitB.Location);
-				}
-				return true;
-		}
-			T.MarkForCull();
-			return false;
-		}
-
 		void Internal_PopulatePolyEdgesFromTriEdges(
 			const TriMesh& TMesh,
-			const TArray<TriMesh*>& OtherMeshes,
+			TArray<TriMesh*>& OtherMeshes,
 			TArray<UnstructuredPolygon>& UPolys,
 			float BBoxDiagDistance,
 			float MinZ
@@ -846,6 +769,14 @@ namespace Geometry {
 			MeshHitCounter MHitCtr(OtherMeshes);
 			const auto& TriGrid = TMesh.Grid;
 			constexpr uint32 flags = PolyEdge::ON_EDGE_AB | PolyEdge::ON_EDGE_BC | PolyEdge::ON_EDGE_CA;
+			
+			const int OtherMeshCt = OtherMeshes.Num();
+			TArrayView<TriMesh*> ExcludingBV;
+			// TODO: there shouldn't be any group sizes of one coming into here, but for now, this is necessary
+			if (OtherMeshCt > 1) {
+				ExcludingBV = TArrayView<TriMesh*>(OtherMeshes).Slice(0, OtherMeshes.Num() - 1);
+			}
+			
 			for (int i = 0; i < TriGrid.Num(); i++) {
 				Tri& T = TriGrid[i];
 				UNavDbg::BreakOnVertexCaptureMatch(T);
@@ -854,9 +785,9 @@ namespace Geometry {
 					continue;
 				}
 				UnstructuredPolygon& UPoly = UPolys[i];
-				if (UPoly.Edges.Num() == 0) {
+				if (OtherMeshCt > 1 && UPoly.Edges.Num() == 0) {
 					// if there are no intersections, just check if the tri points are inside other meshes
-					Internal_IsTriObscured(T, OtherMeshes, MinZ, MHitCtr);
+					Internal_IsTriObscured(T, ExcludingBV, MinZ, MHitCtr);
 					continue;
 				}
 				PolyEdge PEdgeAB(T.A, T.B, flags);
@@ -890,10 +821,6 @@ namespace Geometry {
 				Edges.Add(PEdgeAB);
 				Edges.Add(PEdgeBC);
 				Edges.Add(PEdgeCA);
-
-				if (!T.IsInsideBV()) {
-					Internal_GetBoundsVolumePolyEdge(T, UPoly, OtherMeshes, BBoxDiagDistance, MHitCtr);
-				}
 			}
 		}
 
@@ -1150,19 +1077,12 @@ namespace Geometry {
 
 	void FindIntersections(
 		TArray<TriMesh*>& Group,
-		TArray<TArray<UnstructuredPolygon>>& GroupUPolys,
-		bool LastIsBoundsVolume
+		TArray<TArray<UnstructuredPolygon>>& GroupUPolys
 	) {
 		FVector GroupBBoxMin;
 		FVector GroupBBoxMax;
-		if (LastIsBoundsVolume) {
-			TArray<TriMesh*> ModifiedGroup = Group;
-			ModifiedGroup.RemoveAtSwap(Group.Num() - 1);
-			GetGroupExtrema(ModifiedGroup, GroupBBoxMin, GroupBBoxMax, true);
-		}
-		else {
-			GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
-		}
+		
+		GetGroupExtrema(Group, GroupBBoxMin, GroupBBoxMax, true);
 		const float BBoxDiagDist = FVector::Dist(GroupBBoxMin, GroupBBoxMax);
 		const float MinZ = GroupBBoxMin.Z;
 		
@@ -1185,7 +1105,7 @@ namespace Geometry {
 		}
 		// for any tri that has intersections, mark where the tri edges are inside and outside other meshes;
 		// if no intersections, just note which vertices are inside and which are outside
-		for (int i = 0; i < GroupCt - LastIsBoundsVolume; i++) {
+		for (int i = 0; i < GroupCt; i++) {
 			TriMesh& TMesh = *Group[i];
 			TArray<TriMesh*> GroupExcludingThisMesh = Group;
 			GroupExcludingThisMesh.Remove(&TMesh);
