@@ -178,6 +178,7 @@ namespace {
 	}
 
 	bool SimplifyTriMeshes(TArray<TriMesh>& TMeshes) {
+		// this is temp code to test batching
 		int ExitCt = 1000;
 		TArray<TArray<TArray<Tri*>>> BatchTris;
 		uint16 Batch = 1;
@@ -186,7 +187,7 @@ namespace {
 			BatchTris.Add(TArray<TArray<Tri*>>());
 			printf("---\nTMesh %s\n", TCHAR_TO_ANSI(*TMesh.MeshActor->GetName()));
 			for (int SafetyCtr = 0; SafetyCtr < ExitCt; SafetyCtr++) {
-				int TriCt = GProc.GetTriMeshBatch(BatchTris.Last(), TMesh, StartTriIndex, 128, Batch++);
+				int TriCt = GProc.GetTriMeshBatch(BatchTris.Last(), TMesh, StartTriIndex, 2048, Batch++);
 				printf("batch size: %d, ind: %d\n", TriCt, StartTriIndex);
 				if (StartTriIndex == -1) {
 					break;

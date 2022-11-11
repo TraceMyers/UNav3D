@@ -114,6 +114,10 @@ public:
 		return ((Tri*)Container)[i];
 	}
 
+	Tri& operator [] (uint32 i) const {
+		return ((Tri*)Container)[i];
+	}
+
 	void SetVertices(FVector* Vertices);
 
 	void SetTriAt(int i, FVector* A, FVector* B, FVector* C);

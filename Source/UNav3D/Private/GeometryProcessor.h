@@ -10,6 +10,7 @@ struct UnstructuredPolygon;
 struct UPolyNode;
 struct Polygon;
 struct UNavMesh;
+class TriGrid;
 
 // GeometryProcessor's job to work on geometrical objects, given information learned by using Geometry.h
 class GeometryProcessor {
@@ -27,7 +28,7 @@ public:
 	GeometryProcessor();
 	~GeometryProcessor();
 	
-	static int GetTriMeshBatch(
+	static uint32 GetTriMeshBatch(
 		TArray<TArray<Tri*>>& BatchTris,
 		const TriMesh& TMesh,
 		uint32& StartTriIndex,
@@ -55,6 +56,10 @@ private:
 	
 	// Copies the vertex buffer of the mesh into TMesh.Vertices
 	GEOPROC_RESPONSE GetVertices(const FStaticMeshLODResources& LOD, TriMesh& TMesh, uint32& VertexCt) const;
+
+	static inline Tri* GetUnbatchedTri(const TriGrid& Grid);
+
+	static bool GetNewStartTriIndex(const TriGrid& Grid, uint32& StartTriIndex);
 	
 	// Populates TMesh with Tris given the previously filled vertex and index buffers
 	static GEOPROC_RESPONSE Populate(

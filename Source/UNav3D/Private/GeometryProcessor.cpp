@@ -163,7 +163,8 @@ void GeometryProcessor::ReformTriMesh(
 	FormMeshFromGroup(GroupRef, Polygons, NMesh, Mutex);
 }
 
-int GeometryProcessor::GetTriMeshBatch(
+// TODO: probably have this return int so it can return negative values for error codes
+uint32 GeometryProcessor::GetTriMeshBatch(
 	TArray<TArray<Tri*>>& BatchTris,
 	const TriMesh& TMesh,
 	uint32& StartTriIndex,
@@ -174,40 +175,46 @@ int GeometryProcessor::GetTriMeshBatch(
 	constexpr int BFS_SEARCH_MAX = 1024;
 
 	if (BatchSz == 0) {
-		return GEOPROC_BATCH_SZ_0;
+		return 0;
 	}
 	
+	const TriGrid& Grid = TMesh.Grid;
+	const uint32 GridCt = Grid.Num();
+	if (GridCt < StartTriIndex) {
+		return 0;
+	}
+	if (GridCt < BatchSz) {
+		BatchSz = GridCt;
+	}
+
 	TArray<uint32> BFSTrisA;
 	TArray<uint32> BFSTrisB;
 	BFSTrisA.Reserve(BFS_SEARCH_MAX);
 	BFSTrisB.Reserve(BFS_SEARCH_MAX);
 	BFSTrisA.Add(StartTriIndex);
 	TArray<uint32>* BFSTrisPtr = &BFSTrisA;
-	
-	const TriGrid& Grid = TMesh.Grid;
-	const int GridCt = Grid.Num();
-	if (GridCt < BatchSz) {
-		BatchSz = GridCt;
-	}
 	Tri* Neighbors[3] {nullptr};
-	
-	uint16 TriCt = 1;
-	Grid[StartTriIndex].SetBatch(BatchNo);
-	// DBGNOTE: on second iteration w/ breakpoint here, encountered situation where bfstrisnext.num() was == 1
-	// multiple times in a row without any tris being added
-	Grid[StartTriIndex].SetSearched();
+	uint16 TriCt = 0;
 	
 	// populating batch & making sure we exit with m if logical failure or corrupt data
 	for (int m = 0; m < BatchSz; m++) {
-		
 		const uint32 PrevStartTriIndex = StartTriIndex;
 		Tri& StartTri = Grid[StartTriIndex];
 		const FVector& GrpTriNormal = StartTri.Normal;
 		const int GrpIndex = BatchTris.Add(TArray<Tri*>());
-		BatchTris[GrpIndex].Add(&StartTri);
 		TArray<Tri*> TempSearched;
+		
+		BatchTris[GrpIndex].Add(&StartTri);
+		StartTri.SetBatch(BatchNo);
+		StartTri.SetSearched();
+		if (++TriCt >= BatchSz) {
+			GetNewStartTriIndex(Grid, StartTriIndex);
+			return TriCt;
+		}
+		
+		BFSTrisPtr->Add(StartTriIndex);
 		bool BatchFinished = false;
-
+		bool OnlyAssignNeighbors = false;
 		// populating group (within batch) with tris that have normals similar to first tri in group
 		while (true) {
 			TArray<uint32>& BFSTris = *BFSTrisPtr;
@@ -222,7 +229,6 @@ int GeometryProcessor::GetTriMeshBatch(
 				uint32 BFSTriVIndices[3];
 				Grid.GetVIndices(BFSTriIndex, BFSTriVIndices);
 				const int NeighborCt = Geometry::GetNeighborTris(Grid, BFSTriIndex, BFSTriVIndices, Neighbors);
-				bool OnlyAssignNeighbors = false;
 
 				// iterating over neighbors...
 				for (int j = 0; j < NeighborCt; j++) {
@@ -262,46 +268,31 @@ int GeometryProcessor::GetTriMeshBatch(
 			}
 
 			if (BatchFinished) {
-				StartTriIndex = -1;
-				goto TRI_BATCH_COMPLETE;
+				// setting start index for next
+				if (StartTriIndex == PrevStartTriIndex) {
+					GetNewStartTriIndex(Grid, StartTriIndex);
+				}
+				return TriCt;
 			}
 			// for tris that were not added to the group and are unbatched, unset them as searched
 			for (const auto T : TempSearched) {
 				T->UnsetSearched();
 			}
-			if (BFSTrisNext.Num() == 0) {
-				break;	
-			}
 			TempSearched.Empty();
 			BFSTris.Empty(BFS_SEARCH_MAX);
 			BFSTrisPtr = &BFSTrisNext;
+			if (BFSTrisPtr->Num() == 0) {
+				break;	
+			}
 		}
 
 		// if all searched tris were added to the last group or were already searched, either the tmesh has been fully
 		// searched, or there are islands on the mesh that still need to be searched
-		if (PrevStartTriIndex == StartTriIndex) {
-			const Tri* Unbatched = nullptr;
-			for (int i = 0; i < GridCt; i++) {
-				auto& T = Grid[i];
-				if (!T.IsInBatch()) {
-					Unbatched = &T;
-					break;
-				}
-			}
-			if (Unbatched != nullptr) {
-				StartTriIndex = Grid.GetIndex(Unbatched);
-				Grid[StartTriIndex].SetBatch(BatchNo);
-				Grid[StartTriIndex].SetSearched();
-			}
-			else {
-				// TMesh fully searched
-				StartTriIndex = -1;
-				break;
-			}
+		if (PrevStartTriIndex == StartTriIndex && !GetNewStartTriIndex(Grid, StartTriIndex)) {
+			break;
 		}	
 	}
 
-	TRI_BATCH_COMPLETE:
 	// TODO: parameterize the values that determine the outcome here
 	// outside:
 	// create new polygon vertex buffer VBuf
@@ -394,6 +385,27 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::GetVertices(
 	FlushRenderingCommands();
 
 	return GEOPROC_SUCCESS;
+}
+
+Tri* GeometryProcessor::GetUnbatchedTri(const TriGrid& Grid) {
+	for (int i = 0; i < Grid.Num(); i++) {
+		auto& T = Grid[i];
+		if (!T.IsInBatch()) {
+			return &T;
+		}
+	}
+	return nullptr;
+}
+
+bool GeometryProcessor::GetNewStartTriIndex(const TriGrid& Grid, uint32& StartTriIndex) {
+	const Tri* Unbatched = GetUnbatchedTri(Grid);
+	if (Unbatched != nullptr) {
+		StartTriIndex = Grid.GetIndex(Unbatched);
+		return true;
+	}
+	// TMesh fully searched
+	StartTriIndex = -1;
+	return false;
 }
 
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
