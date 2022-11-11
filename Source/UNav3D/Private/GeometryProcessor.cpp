@@ -163,11 +163,10 @@ void GeometryProcessor::ReformTriMesh(
 	FormMeshFromGroup(GroupRef, Polygons, NMesh, Mutex);
 }
 
-// TODO: probably have this return int so it can return negative values for error codes
-uint32 GeometryProcessor::GetTriMeshBatch(
+int GeometryProcessor::GetMeshBatch(
 	TArray<TArray<Tri*>>& BatchTris,
 	const TriMesh& TMesh,
-	uint32& StartTriIndex,
+	int& StartTriIndex,
 	uint16 BatchSz,
 	uint16 BatchNo
 ) {
@@ -175,13 +174,13 @@ uint32 GeometryProcessor::GetTriMeshBatch(
 	constexpr int BFS_SEARCH_MAX = 1024;
 
 	if (BatchSz == 0) {
-		return 0;
+		return GEOPROC_BATCH_SZ_0;
 	}
 	
 	const TriGrid& Grid = TMesh.Grid;
-	const uint32 GridCt = Grid.Num();
+	const int GridCt = Grid.Num();
 	if (GridCt < StartTriIndex) {
-		return 0;
+		return GEOPROC_BAD_START_TRI;
 	}
 	if (GridCt < BatchSz) {
 		BatchSz = GridCt;
@@ -208,6 +207,13 @@ uint32 GeometryProcessor::GetTriMeshBatch(
 		StartTri.SetBatch(BatchNo);
 		StartTri.SetSearched();
 		if (++TriCt >= BatchSz) {
+			uint32 BFSTriVIndices[3];
+			Grid.GetVIndices(StartTriIndex, BFSTriVIndices);
+			const int NeighborCt = Geometry::GetNeighborTris(Grid, StartTriIndex, BFSTriVIndices, Neighbors);
+			for (int j = 0; j < NeighborCt; j++) {
+				Tri* Neighbor = Neighbors[j];
+				StartTri.Neighbors.Add(Neighbor);
+			}
 			GetNewStartTriIndex(Grid, StartTriIndex);
 			return TriCt;
 		}
@@ -397,7 +403,7 @@ Tri* GeometryProcessor::GetUnbatchedTri(const TriGrid& Grid) {
 	return nullptr;
 }
 
-bool GeometryProcessor::GetNewStartTriIndex(const TriGrid& Grid, uint32& StartTriIndex) {
+bool GeometryProcessor::GetNewStartTriIndex(const TriGrid& Grid, int& StartTriIndex) {
 	const Tri* Unbatched = GetUnbatchedTri(Grid);
 	if (Unbatched != nullptr) {
 		StartTriIndex = Grid.GetIndex(Unbatched);

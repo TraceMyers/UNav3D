@@ -39,6 +39,11 @@ void FGeoProcThread::StopThread() {
 	IsThreadRun = false;
 }
 
+void FGeoProcThread::InitSimplify(TArray<TArray<Tri*>>* _Batches, TriMesh* _TMesh) {
+	Batches = _Batches;
+	TMesh = _TMesh;
+}
+
 void FGeoProcThread::InitReformTMesh(TArray<TriMesh*>* Group, UNavMesh* _NMesh) {
 	TMeshGroup = Group;
 	NMesh = _NMesh;
@@ -54,7 +59,7 @@ uint32 FGeoProcThread::Run() {
 	uint32 RetVal = 0;
 	
 	switch(Task) {
-	case GEOPROC_REFORM_TRIMESH:
+	case GEOPROC_REFORM:
 		if (TMeshGroup == nullptr || Mutex == nullptr || NMesh == nullptr) {
 			RetVal = -1;
 		}

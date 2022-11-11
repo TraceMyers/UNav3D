@@ -113,6 +113,27 @@ namespace {
 		return true;
 	}
 
+	// TODO: Make an error log for more informative errors
+	bool BatchTris(const TriMesh& TMesh, TArray<TArray<Tri*>>& Batches) {
+		constexpr static uint16 BATCH_SZ = 2048;
+		uint16 MeshBatch = 1;
+		if ((float)TMesh.Grid.Num() / BATCH_SZ >= (float)UINT16_MAX) {
+			UNAV_GENERR("Batch size too small for one or more of the meshes.")
+			return false;
+		}
+		int StartTriIndex = 0;
+		while (StartTriIndex >= 0) {
+			const int BatchCt = GProc.GetMeshBatch(
+				Batches, TMesh, StartTriIndex, 2048, MeshBatch++
+			);
+			if (BatchCt == 0) {
+				UNAV_GENERR("Got a batch count of zero, which might indicate a problem with a mesh.")
+				return false;
+			}
+		}	
+		return true;
+	}
+
 	// Takes meshes found inside bounds volume and populates TriMeshes with their data
 	// This must run in the game thread, since access to mesh data is only allowed there
 	bool PopulateTriMeshes(TArray<TriMesh>& TMeshes) {
@@ -143,18 +164,18 @@ namespace {
 	#ifdef UNAV_DBG
 			UNavDbg::PrintTriMesh(TMesh);
 	#endif
+
+			TArray<TArray<Tri*>> Batches;
+			if (!BatchTris(TMesh, Batches)) {
+				return false;
+			}
+			// TODO: thread simplify
 		}
 		
 		return true;
 	}
 
 	bool ReformTriMeshes(TArray<TArray<TriMesh*>>& Groups) {
-		// TODO: use arrayviews for nonoverlapping permutations of subgroups per thread
-		// TODO: ... use tri count budget to determine num in subgroup
-
-		// NOTE: the number of tri going in will be between 3*grpsiz and 3 * tri budget - 3*(grpsiz+1) (right?)
-		// tri budget should be dependent the average tri ct per group, with minimum to justify thread overhead
-		// no need to wait at the end of each group, since group a work is totally nonoverlapping with group b work
 		Data::NMeshes.Init(UNavMesh(), Groups.Num());
 		for (int i = 0; i < Groups.Num(); i++) {
 			const int Avail = GProcWaitForAvailable(200.0f);
@@ -163,7 +184,7 @@ namespace {
 			}
 			GProcThreads[Avail]->InitReformTMesh(&Groups[i], &Data::NMeshes[i]);
 			IsGProcTAvail[Avail].AtomicSet(false);
-			if (!TryStartThread(FGeoProcThread::GEOPROC_REFORM_TRIMESH, Avail)) {
+			if (!TryStartThread(FGeoProcThread::GEOPROC_REFORM, Avail)) {
 				IsGProcTAvail[Avail].AtomicSet(true);
 			}
 		}
@@ -174,26 +195,6 @@ namespace {
 		// for (int i = 0; i <Groups.Num(); i++) {
 		// 	GProc.ReformTriMesh(&Groups[i], &DataProcMutex, &B, &Data::NMeshes[i]);
 		// }
-		return true;
-	}
-
-	bool SimplifyTriMeshes(TArray<TriMesh>& TMeshes) {
-		// this is temp code to test batching
-		int ExitCt = 1000;
-		TArray<TArray<TArray<Tri*>>> BatchTris;
-		uint16 Batch = 1;
-		for (auto& TMesh : TMeshes) {
-			uint32 StartTriIndex = 0;
-			BatchTris.Add(TArray<TArray<Tri*>>());
-			printf("---\nTMesh %s\n", TCHAR_TO_ANSI(*TMesh.MeshActor->GetName()));
-			for (int SafetyCtr = 0; SafetyCtr < ExitCt; SafetyCtr++) {
-				int TriCt = GProc.GetTriMeshBatch(BatchTris.Last(), TMesh, StartTriIndex, 2048, Batch++);
-				printf("batch size: %d, ind: %d\n", TriCt, StartTriIndex);
-				if (StartTriIndex == -1) {
-					break;
-				}
-			}	
-		}
 		return true;
 	}
 
@@ -278,12 +279,11 @@ void DataProcessing::TotalReload() {
 	);
 	Task.MakeDialog(false);
 	
-	EnterProgressFrame(Task, "getting static mesh data");
+	EnterProgressFrame(Task, "getting and simplifying static mesh data");
 	if (!PopulateTriMeshes(Data::TMeshes)) {
 		return;
 	}
 
-	SimplifyTriMeshes(Data::TMeshes);
 	return;
 	EnterProgressFrame(Task, "grouping meshes by intersection");
 	TArray<TArray<TriMesh*>> TMeshGroups;

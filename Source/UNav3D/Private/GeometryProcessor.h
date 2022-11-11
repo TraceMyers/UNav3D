@@ -19,19 +19,20 @@ public:
 
 	enum GEOPROC_RESPONSE {
 		GEOPROC_SUCCESS,
-		GEOPROC_HIGH_INDEX,
-		GEOPROC_ALLOC_FAIL,
-		GEOPROC_BATCH_SZ_0,
-		GEOPROC_BAD_BATCH_NO
+		GEOPROC_HIGH_INDEX=-1,
+		GEOPROC_ALLOC_FAIL=-2,
+		GEOPROC_BATCH_SZ_0=-3,
+		GEOPROC_BAD_BATCH_SZ=-4,
+		GEOPROC_BAD_START_TRI=-5
 	};
 
 	GeometryProcessor();
 	~GeometryProcessor();
 	
-	static uint32 GetTriMeshBatch(
+	static int GetMeshBatch(
 		TArray<TArray<Tri*>>& BatchTris,
 		const TriMesh& TMesh,
-		uint32& StartTriIndex,
+		int& StartTriIndex,
 		uint16 BatchSz,
 		uint16 BatchNo
 	);
@@ -59,8 +60,8 @@ private:
 
 	static inline Tri* GetUnbatchedTri(const TriGrid& Grid);
 
-	static bool GetNewStartTriIndex(const TriGrid& Grid, uint32& StartTriIndex);
-	
+	static bool GetNewStartTriIndex(const TriGrid& Grid, int& StartTriIndex);
+
 	// Populates TMesh with Tris given the previously filled vertex and index buffers
 	static GEOPROC_RESPONSE Populate(
 		TriMesh& TMesh,
