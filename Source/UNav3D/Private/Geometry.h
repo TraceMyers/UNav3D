@@ -13,8 +13,6 @@ struct UnstructuredPolygon;
 // Geometry's job is to provide information about geometrical objects
 namespace Geometry {
 
-	
-
 	enum VERTEX_T {VERTEX_INTERIOR, VERTEX_EXTERIOR};
 	
 	// Populates a BoundingBox from a AStaticMeshActor
@@ -44,9 +42,9 @@ namespace Geometry {
 	);
 
 	// Gets the extrema of world axis-aligned Bounding Box of a group of TMeshes
-	void GetGroupExtrema(const TArray<TriMesh*>& TMeshes, FVector& Min, FVector& Max, bool NudgeOutward=false);
+	inline void GetGroupExtrema(const TArray<TriMesh*>& TMeshes, FVector& Min, FVector& Max, bool NudgeOutward=false);
 
-	void GetAxisAlignedExtrema(const BoundingBox& BBox, FVector& Min, FVector& Max, float NudgeOutward=0.0f);
+	inline void GetAxisAlignedExtrema(const BoundingBox& BBox, FVector& Min, FVector& Max, float NudgeOutward=0.0f);
 
 	void FlagTrisOutsideBoxForCull(const BoundingBox& BBox, const TriMesh& TMesh);
 
@@ -60,14 +58,14 @@ namespace Geometry {
 	);
 
 	// Does P (roughly) lie on/inside Triangle ABC?
-	bool DoesPointTouchTri(const FVector& A, const FVector& B, const FVector& C, const FVector& P);
+	inline bool DoesPointTouchTri(const FVector& A, const FVector& B, const FVector& C, const FVector& P);
 
 	// Do A, B, C come close to T.X, T.Y, T.Z in any order? Useful for finding a specific tri and debugging it
-	bool DoesTriHaveSimilarVectors(const Tri& T, const FVector& A, const FVector& B, const FVector& C);
+	inline bool DoesTriHaveSimilarVectors(const Tri& T, const FVector& A, const FVector& B, const FVector& C);
 
 	// Tests if P.Prev, P and P.Next make a triangle that contains no other points in the polygon
 	// polygon must have >= 4 vertices
-	bool IsEar(const PolyNode& P);
+	inline bool IsEar(const PolyNode& P);
 
 	// Given an ordered set of vertices a, b, c, d of a polygon, regardless of polygon orientation (cw or ccw),
 	// and given the type of vertex b is known, the type of vertex c can be determined. if b,c,d make an interior
@@ -75,7 +73,9 @@ namespace Geometry {
 	// The normal can be up or down facing - it doesn't matter. W = -(b-a), V = c-b, U = d-c, PrevType = type of b.
 	// To start, you can find an interior vertex by picking any point q in R^3 and getting the farthest vertex from q.
 	// That vertex will be interior.
-	VERTEX_T GetPolyVertexType(
+	inline VERTEX_T GetPolyVertexType(
 		const FVector& Normal, const FVector& W, const FVector& V, const FVector& U, VERTEX_T PrevType
 	);
+
+	inline int GetNeighborTris(const TriGrid& Grid, int TIndex, const uint32* TriVIndices, Tri** Neighbors);
 }

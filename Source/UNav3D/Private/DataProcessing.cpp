@@ -148,7 +148,7 @@ namespace {
 		return true;
 	}
 
-	bool ReformTriMeshes(TArray<TArray<TriMesh*>> Groups) {
+	bool ReformTriMeshes(TArray<TArray<TriMesh*>>& Groups) {
 		// TODO: use arrayviews for nonoverlapping permutations of subgroups per thread
 		// TODO: ... use tri count budget to determine num in subgroup
 
@@ -174,6 +174,25 @@ namespace {
 		// for (int i = 0; i <Groups.Num(); i++) {
 		// 	GProc.ReformTriMesh(&Groups[i], &DataProcMutex, &B, &Data::NMeshes[i]);
 		// }
+		return true;
+	}
+
+	bool SimplifyTriMeshes(TArray<TriMesh>& TMeshes) {
+		int ExitCt = 1000;
+		TArray<TArray<TArray<Tri*>>> BatchTris;
+		uint16 Batch = 1;
+		for (auto& TMesh : TMeshes) {
+			uint32 StartTriIndex = 0;
+			BatchTris.Add(TArray<TArray<Tri*>>());
+			printf("---\nTMesh %s\n", TCHAR_TO_ANSI(*TMesh.MeshActor->GetName()));
+			for (int SafetyCtr = 0; SafetyCtr < ExitCt; SafetyCtr++) {
+				int TriCt = GProc.GetTriMeshBatch(BatchTris.Last(), TMesh, StartTriIndex, 128, Batch++);
+				printf("batch size: %d, ind: %d\n", TriCt, StartTriIndex);
+				if (StartTriIndex == -1) {
+					break;
+				}
+			}	
+		}
 		return true;
 	}
 
@@ -263,6 +282,8 @@ void DataProcessing::TotalReload() {
 		return;
 	}
 
+	SimplifyTriMeshes(Data::TMeshes);
+	return;
 	EnterProgressFrame(Task, "grouping meshes by intersection");
 	TArray<TArray<TriMesh*>> TMeshGroups;
 	GProc.GroupTriMeshes(Data::TMeshes, TMeshGroups);

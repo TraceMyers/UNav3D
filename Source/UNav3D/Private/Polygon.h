@@ -10,6 +10,16 @@ struct PolyNode {
 	PolyNode* Next;
 };
 
+struct VBufferPolyNode {
+	VBufferPolyNode(int _VIndex) :
+		VIndex(_VIndex), PolygonIndex(-1), Prev(nullptr), Next(nullptr)
+	{}
+	const int VIndex;
+	int PolygonIndex;
+	VBufferPolyNode* Prev;
+	VBufferPolyNode* Next;
+};
+
 // edges are between adjacent vertices; index Num() - 1 connects to 0; Every polygon is a stepping stone
 // between a triangle that was intersected and a new set of triangles with no intersections.
 struct Polygon {

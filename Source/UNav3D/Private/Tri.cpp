@@ -6,18 +6,20 @@
 namespace {
 	
 	enum TRI_FLAGS {
-		TRI_A_OBSCURED =	0x0001,
-		TRI_B_OBSCURED =	0x0002,
-		TRI_C_OBSCURED =	0x0004,
-		TRI_CHANGED =		0x00f0,
-		TRI_CULL =			0x0010,
-		TRI_PROBLEM_CASE =	0x0020,
-		TRI_TO_POLYGON =	0x0040,
-		TRI_ON_BOX_EDGE =	0x0100,
-		TRI_A_INSIDE_BV =	0x1000,
-		TRI_B_INSIDE_BV =	0x2000,
-		TRI_C_INSIDE_BV =	0x4000,
+		TRI_A_OBSCURED =	0x00000001,
+		TRI_B_OBSCURED =	0x00000002,
+		TRI_C_OBSCURED =	0x00000004,
+		TRI_CHANGED =		0x000000f0,
+		TRI_CULL =			0x00000010,
+		TRI_PROBLEM_CASE =	0x00000020,
+		TRI_TO_POLYGON =	0x00000040,
+		TRI_ON_BOX_EDGE =	0x00000100,
+		TRI_A_INSIDE_BV =	0x00001000,
+		TRI_B_INSIDE_BV =	0x00002000,
+		TRI_C_INSIDE_BV =	0x00004000,
 		TRI_INSIDE_BV =		TRI_A_INSIDE_BV | TRI_B_INSIDE_BV | TRI_C_INSIDE_BV,
+		TRI_IN_BATCH =		0x00ff0000,
+		TRI_SEARCHED =		0x01000000	
 	};
 
 	constexpr float ONE_THIRD = 1.0f / 3.0f;
@@ -34,7 +36,9 @@ Tri::Tri() :
 	Flags(0x0),
 	Area(0.0f),
 	LongestSidelenSq(0.0f)
-{}
+{
+	Neighbors.Reserve(3);	
+}
 
 Tri::Tri(FVector& _A, FVector& _B, FVector& _C) :
 	A(_A), B(_B), C(_C),
@@ -42,7 +46,9 @@ Tri::Tri(FVector& _A, FVector& _B, FVector& _C) :
 	Flags(0x0),
 	Area(GetArea(_A, _B, _C)),
 	LongestSidelenSq(GetLongestTriSidelenSq(_A, _B, _C))
-{}
+{
+	Neighbors.Reserve(3);	
+}
 
 float Tri::GetLongestTriSidelenSq(const FVector& A, const FVector& B, const FVector& C) {
 	const float AB = (A - B).SizeSquared();
@@ -174,6 +180,30 @@ void Tri::MarkProblemCase() {
 
 void Tri::MarkForPolygon() {
 	Flags |= TRI_TO_POLYGON;	
+}
+
+void Tri::SetBatch(int BatchNo) {
+	Flags |= BatchNo << 16;
+}
+
+int Tri::GetBatch() const {
+	return (Flags & TRI_IN_BATCH) >> 16;	
+}
+
+bool Tri::IsInBatch() const {
+	return Flags & TRI_IN_BATCH;
+}
+
+void Tri::SetSearched() {
+	Flags |= TRI_SEARCHED;	
+}
+
+void Tri::UnsetSearched() {
+	Flags &= ~TRI_SEARCHED;	
+}
+
+bool Tri::IsSearched() const {
+	return Flags & TRI_SEARCHED;	
 }
 
 void Tri::CalculateNormal(FVector& _Normal) const {

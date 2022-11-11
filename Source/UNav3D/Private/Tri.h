@@ -102,6 +102,18 @@ struct Tri {
 
 	void MarkForPolygon();
 
+	void SetBatch(int BatchNo);
+
+	int GetBatch() const;
+
+	bool IsInBatch() const;
+
+	void SetSearched();
+
+	void UnsetSearched();
+
+	bool IsSearched() const;
+	
 	void CalculateNormal(FVector& Normal) const;
 
 	static FVector CalculateNormal(const FVector &A, const FVector& B, const FVector& C);
@@ -111,6 +123,7 @@ struct Tri {
 	FVector& C;
 	FVector Normal;
 	uint32 Flags;
+	TArray<Tri*> Neighbors;
 	// -- for faster intersection checking --
 	float Area; 
 	float LongestSidelenSq;

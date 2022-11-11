@@ -19,11 +19,21 @@ public:
 	enum GEOPROC_RESPONSE {
 		GEOPROC_SUCCESS,
 		GEOPROC_HIGH_INDEX,
-		GEOPROC_ALLOC_FAIL
+		GEOPROC_ALLOC_FAIL,
+		GEOPROC_BATCH_SZ_0,
+		GEOPROC_BAD_BATCH_NO
 	};
 
 	GeometryProcessor();
 	~GeometryProcessor();
+	
+	static int GetTriMeshBatch(
+		TArray<TArray<Tri*>>& BatchTris,
+		const TriMesh& TMesh,
+		uint32& StartTriIndex,
+		uint16 BatchSz,
+		uint16 BatchNo
+	);
 	
 	// Pulls Static Mesh data and populates TMesh with it. If TForm != nullptr, it will be used to transform the vertices
 	GEOPROC_RESPONSE PopulateTriMesh(TriMesh& TMesh, bool DoTransform=true) const;
@@ -118,6 +128,6 @@ private:
 	
 	// re-polygonizes nearby tris with similar normals and reforms triangles from those polygons, simplifying the
 	// meshes
-	static GEOPROC_RESPONSE SimplifyTriMesh(TriMesh& TMesh);
+	
 };
 

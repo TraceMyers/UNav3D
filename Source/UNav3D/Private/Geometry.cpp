@@ -867,6 +867,57 @@ namespace Geometry {
 				);
 			}
 		}
+
+		bool Internal_DoIndicesMakeEdge(const uint32* IndicesA, const uint32* IndicesB) {
+			constexpr int j[2][2] {{1, 2}, {0, 2}};
+			for (int i = 0; i < 2; i++) {
+				const int j0 = j[i][0];
+				const int j1 = j[i][1];
+				if (IndicesA[i] == IndicesB[0]) {
+					if (IndicesA[j0] == IndicesB[1]) {
+						return true;
+					}
+					if (IndicesA[j0] == IndicesB[2]) {
+						return true;
+					}
+					if (IndicesA[j1] == IndicesB[1]) {
+						return true;
+					}
+					if (IndicesA[j1] == IndicesB[2]) {
+						return true;
+					}
+				}
+				else if (IndicesA[i] == IndicesB[1]) {
+					if (IndicesA[j0] == IndicesB[0]) {
+						return true;
+					}
+					if (IndicesA[j0] == IndicesB[2]) {
+						return true;
+					}
+					if (IndicesA[j1] == IndicesB[0]) {
+						return true;
+					}
+					if (IndicesA[j1] == IndicesB[2]) {
+						return true;
+					}
+				}
+				else if (IndicesA[i] == IndicesB[2]) {
+					if (IndicesA[j0] == IndicesB[1]) {
+						return true;
+					}
+					if (IndicesA[j0] == IndicesB[0]) {
+						return true;
+					}
+					if (IndicesA[j1] == IndicesB[1]) {
+						return true;
+					}
+					if (IndicesA[j1] == IndicesB[0]) {
+						return true;
+					}
+				}
+			}
+			return false;
+		}
 	}
 
 	// -----------------------------------------------------------------------------------------------------------------
@@ -1193,4 +1244,30 @@ namespace Geometry {
 		}
 		return VERTEX_INTERIOR;
 	}
+
+	int GetNeighborTris(const TriGrid& Grid, int TIndex, const uint32* TriVIndices, Tri** Neighbors) {
+		int NeighborCt = 0;
+		for (int i = 0; i < TIndex; i++) {
+			uint32 VIndices[3];
+			Grid.GetVIndices(i, VIndices);
+			if (Internal_DoIndicesMakeEdge(TriVIndices, VIndices)) {
+				Neighbors[NeighborCt] = &Grid[i];
+				if (++NeighborCt == 3) {
+					return NeighborCt;
+				}
+			}
+		}
+		for (int i = TIndex + 1; i < Grid.Num(); i++) {
+			uint32 VIndices[3];
+			Grid.GetVIndices(i, VIndices);
+			if (Internal_DoIndicesMakeEdge(TriVIndices, VIndices)) {
+				Neighbors[NeighborCt] = &Grid[i];
+				if (++NeighborCt == 3) {
+					return NeighborCt;
+				}
+			}
+		}
+		return NeighborCt;
+	}
+	
 }

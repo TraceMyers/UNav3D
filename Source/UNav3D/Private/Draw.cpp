@@ -62,7 +62,7 @@ void ADraw::AddNavMesh(UNavMesh& NMesh) {
 	FVector CalculatedNormal;
 	const auto& Grid = NMesh.Grid;
 	for (int j = 0; j < Grid.Num(); j++) {
-		Grid.GetIndices(j, Triangle);
+		Grid.GetVIndices(j, Triangle);
 		const Tri& T = Grid[j];
 		
 		Triangles.Append(Triangle);

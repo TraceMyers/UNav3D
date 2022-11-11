@@ -119,7 +119,11 @@ public:
 	void SetTriAt(int i, FVector* A, FVector* B, FVector* C);
 
 	// returns the index of the vertex; for drawing mesh
-	inline void GetIndices(int i, TArray<int32>& Indices) const;
+	inline void GetVIndices(int i, TArray<int32>& Indices) const;
+	
+	inline void GetVIndices(int i, uint32* Indices) const;
+
+	inline int GetIndex(const Tri* T) const;
 	
 private:
 

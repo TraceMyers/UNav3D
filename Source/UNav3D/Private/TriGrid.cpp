@@ -171,11 +171,22 @@ void TriGrid::SetTriAt(int i, FVector* A, FVector* B, FVector* C) {
 	Tri* T = new ((Tri*)Container + i) Tri(*A, *B, *C);
 }
 
-void TriGrid::GetIndices(int i, TArray<int32>& Indices) const {
-	Tri& T = ((Tri*)Container)[i];
+void TriGrid::GetVIndices(int i, TArray<int32>& Indices) const {
+	const Tri& T = ((Tri*)Container)[i];
 	Indices.Add(&T.A - Vertices);
 	Indices.Add(&T.B - Vertices);
 	Indices.Add(&T.C - Vertices);
+}
+
+void TriGrid::GetVIndices(int i, uint32* Indices) const {
+	const Tri& T = ((Tri*)Container)[i];
+	Indices[0] = &T.A - Vertices;
+	Indices[1] = &T.B - Vertices;
+	Indices[2] = &T.C - Vertices;
+}
+
+int TriGrid::GetIndex(const Tri* T) const {
+	return T - ((Tri*)Container);
 }
 
 void TriGrid::SetOutgoing(const FIntVector& GridPos) {
