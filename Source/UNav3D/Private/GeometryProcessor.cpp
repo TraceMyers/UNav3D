@@ -50,12 +50,18 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::PopulateTriMesh(TriMesh& 
 				Vertices[i] = TForm.TransformPosition(Vertices[i]);
 			}
 		}
-		// populate mesh; fails if any indices outside of reasonable bounds
-		Response = Populate(TMesh, Indices, IndexCt, VertexCt);
+		Response = FixDuplicateVertices(TMesh.Vertices, Indices, IndexCt, VertexCt);
+		if (Response == GEOPROC_SUCCESS) {
+			// populate mesh; fails if any indices outside of reasonable bounds
+			Populate(TMesh, Indices, IndexCt, VertexCt);
+		}
 	}
 
 	if (Response != GEOPROC_SUCCESS) {
 		TMesh.ResetVertexData();
+	}
+	else {
+		
 	}
 	delete Indices;
 	return Response;
@@ -173,8 +179,8 @@ int GeometryProcessor::GetMeshBatch(
 	constexpr float DEVIATION_CUTOFF = 0.9f;
 	constexpr int BFS_SEARCH_MAX = 1024;
 
-	if (BatchSz == 0) {
-		return GEOPROC_BATCH_SZ_0;
+	if (BatchSz <= 0) {
+		return GEOPROC_BATCH_SZ_LEQ_0;
 	}
 	
 	const TriGrid& Grid = TMesh.Grid;
@@ -190,13 +196,9 @@ int GeometryProcessor::GetMeshBatch(
 	TArray<uint32> BFSTrisB;
 	BFSTrisA.Reserve(BFS_SEARCH_MAX);
 	BFSTrisB.Reserve(BFS_SEARCH_MAX);
-	BFSTrisA.Add(StartTriIndex);
 	TArray<uint32>* BFSTrisPtr = &BFSTrisA;
-	Tri* Neighbors[3] {nullptr};
 	int TriCt = 0;
 	TArray<Tri*> TempSearched;
-	
-	// DEBUG: case at end - 6 neighbors, only one of the bits could have been a neighbor flag
 	
 	// populating batch & making sure we exit with m if logical failure or corrupt data
 	for (int m = 0; m < BatchSz; m++) {
@@ -205,37 +207,19 @@ int GeometryProcessor::GetMeshBatch(
 		Tri& StartTri = Grid[StartTriIndex];
 		const FVector& GrpTriNormal = StartTri.Normal;
 		const int GrpIndex = BatchTris.Add(TArray<Tri*>());
+		const int GrpNum = GrpIndex + 1;
 		if (GrpIndex >= Tri::MAX_GROUP_CT) {
 			StartTriIndex = -1;
 			TriCt = GEOPROC_MAXED_GROUPS;
 			goto BATCH_END_PROCESSING;
 		}
-		
 		StartTri.SetSearched();
-		if (++TriCt >= BatchSz) {
-			BatchTris[GrpIndex].Add(&StartTri);
-			// mirrors process in loop below of getting neighbors, but we're exiting because we met the batch size
-			uint32 BFSTriVIndices[3];
-			Grid.GetVIndices(StartTriIndex, BFSTriVIndices);
-			uint32 NeighborFlags;
-			const int NeighborCt = Geometry::GetNeighborTris(
-				Grid, StartTriIndex, BFSTriVIndices, Neighbors, NeighborFlags
-			);
-			StartTri.AddFlags(NeighborFlags);
-			for (int j = 0; j < NeighborCt; j++) {
-				Tri* Neighbor = Neighbors[j];
-				StartTri.Neighbors.Add(Neighbor);
-			}
-			
-			GetNewStartTriIndex(Grid, StartTriIndex);
-			goto BATCH_END_PROCESSING;
-		}
-		
 		BFSTrisPtr->Add(StartTriIndex);
+		
 		bool BatchFinished = false;
 		bool OnlyAssignNeighbors = false;
 		// populating group (within batch) with tris that have normals similar to first tri in group
-		while (true) {
+		for (int Safety = 0 ; Safety < BFS_SEARCH_MAX; Safety++) {
 			TArray<uint32>& BFSTris = *BFSTrisPtr;
 			TArray<uint32>& BFSTrisNext = (BFSTrisPtr == &BFSTrisA ? BFSTrisB : BFSTrisA);
 			// iterating over this group's outer members (BFS search edge)
@@ -243,47 +227,40 @@ int GeometryProcessor::GetMeshBatch(
 				// getting next tri whose neighbors we will be checking
 				const uint32 BFSTriIndex = BFSTris[i];
 				Tri& BFSTri = Grid[BFSTriIndex];
-
-				// getting the neighbors
-				uint32 BFSTriVIndices[3];
-				Grid.GetVIndices(BFSTriIndex, BFSTriVIndices);
-				uint32 NeighborFlags = 0x0;
-				const int NeighborCt = Geometry::GetNeighborTris(
-					Grid, BFSTriIndex, BFSTriVIndices, Neighbors, NeighborFlags
-				);
-				BFSTri.AddFlags(NeighborFlags);
-				BatchTris[GrpIndex].Add(&BFSTri); // add tri to this group...
-				if (++TriCt >= BatchSz) {
-					OnlyAssignNeighbors = true;
-					BatchFinished = true;
-				}
+				BatchTris[GrpIndex].Add(&BFSTri); // add tri to this group
+				BFSTri.SetGroup(GrpNum);
+				++TriCt; 
 				
+				const int NeighborCt = GetNeighbors(
+					Grid, BatchSz, BFSTri, TriCt, OnlyAssignNeighbors, BatchFinished
+				);
+				if (TriCt >= BatchSz) {
+					GetNewStartTriIndex(Grid, StartTriIndex);
+					goto BATCH_END_PROCESSING;
+				}
+				if (OnlyAssignNeighbors) {
+					continue;
+				}
 				// iterating over neighbors...
 				for (int j = 0; j < NeighborCt; j++) {
-					Tri* Neighbor = Neighbors[j];
-					BFSTri.Neighbors.Add(Neighbor);
-					if (OnlyAssignNeighbors) {
-						continue;
-					}
+					Tri* Neighbor = BFSTri.Neighbors[j];
 					// checking if they're already part of a group or have been searched by this group...
 					if (!Neighbor->IsSearched()) {
 						const int TIndex = Grid.GetIndex(Neighbor);
 						Neighbor->SetSearched();
 						// and checking if this neighbor's normal is similar enough to start tri's to be added to the group
 						const float CosPhi = FVector::DotProduct(GrpTriNormal, Neighbor->Normal);
-						if (
-							!Neighbor->IsInGroup()
-							&& CosPhi > DEVIATION_CUTOFF
-						) {
+						// not && CosPhi... because TempSearched have their searched flags unset
+						if (CosPhi > DEVIATION_CUTOFF) {
 							BFSTrisNext.Add(TIndex); // this neighbor will become an outer member (a search node)
-							
 							if (BFSTrisNext.Num() >= BFS_SEARCH_MAX) {
 								OnlyAssignNeighbors = true;
 							}
 						}
 						else {
+							// mark as searched, temporarily for this group
 							TempSearched.Add(Neighbor);
-							StartTriIndex = Grid.GetIndex(Neighbor);
+							StartTriIndex = TIndex;
 						}
 					}
 				}
@@ -296,17 +273,17 @@ int GeometryProcessor::GetMeshBatch(
 				}
 				goto BATCH_END_PROCESSING;
 			}
-			// for tris that were not added to the group and are unbatched, unset them as searched
-			for (const auto T : TempSearched) {
-				T->UnsetSearched();
-			}
-			TempSearched.Empty();
 			BFSTris.Empty(BFS_SEARCH_MAX);
 			BFSTrisPtr = &BFSTrisNext;
 			if (BFSTrisPtr->Num() == 0) {
 				break;	
 			}
 		}
+		// for tris that were not added to the group and are unbatched, unset them as searched
+		for (const auto T : TempSearched) {
+			T->UnsetSearched();
+		}
+		TempSearched.Empty();
 
 		// if all searched tris were added to the last group or were already searched, either the tmesh has been fully
 		// searched, or there are islands on the mesh that still need to be searched
@@ -321,12 +298,14 @@ int GeometryProcessor::GetMeshBatch(
 	}
 	for (int i = 0; i < BatchTris.Num(); i++) {
 		auto& Group = BatchTris[i];
-		const uint16 GrpIndex = i + 1;
+		const uint16 GrpNum = i + 1;
 		for (const auto T : Group) {
+			check(T->Neighbors.Num() == 3);
 			T->OrganizeNeighbors();
 			T->ClearFlags();
+			T->SetSearched();
 			T->SetBatch(BatchNo);
-			T->SetGroup(GrpIndex);	
+			T->SetGroup(GrpNum);	
 		}
 	}
 
@@ -458,6 +437,28 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::GetVertices(
 	return GEOPROC_SUCCESS;
 }
 
+int GeometryProcessor::GetNeighbors(
+	const TriGrid& Grid, int BatchSz, Tri& T, int& TriCt, bool& OnlyAssignNeighbors, bool& BatchFinished
+) {
+	uint32 BFSTriVIndices[3];
+	const int TriIndex = Grid.GetIndex(&T);
+	Grid.GetVIndices(TriIndex, BFSTriVIndices);
+	
+	uint32 NeighborFlags = 0x0;
+	Tri* Neighbors[3] {nullptr};
+	const int NeighborCt = Geometry::GetNeighborTris(
+		Grid, TriIndex, BFSTriVIndices, Neighbors, NeighborFlags
+	);
+	
+	T.AddFlags(NeighborFlags);
+	
+	for (int j = 0; j < NeighborCt; j++) {
+		Tri* Neighbor = Neighbors[j];
+		T.Neighbors.Add(Neighbor);
+	}
+	return NeighborCt;
+}
+
 Tri* GeometryProcessor::GetUnbatchedTri(const TriGrid& Grid) {
 	for (int i = 0; i < Grid.Num(); i++) {
 		auto& T = Grid[i];
@@ -575,21 +576,35 @@ void GeometryProcessor::SmoothPolygon(VBufferPolygon& Polygon, float Sigma, int 
 	}	
 }
 
-GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
-	TriMesh& TMesh,
-	uint16* Indices,
-	uint32 IndexCt,
-	uint32 VertexCt
+GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::FixDuplicateVertices(
+	FVector* Vertices, uint16* Indices, uint32 IndexCt, uint32 VertexCt
 ) {
 	for (uint32 i = 0; i < IndexCt; i++) {
 		const uint16& Index = Indices[i];
-		if (Index > VertexCt) {
+		if (Index >= VertexCt) {
 			return GEOPROC_HIGH_INDEX;	
 		}
 	}
+	for (uint32 i = 0; i < VertexCt - 1; i++) {
+		FVector& A = Vertices[i];
+		for (uint32 j = i + 1; j < VertexCt; j++) {
+			FVector& B = Vertices[j];
+			if (A == B) {
+				for (uint32 k = 0; k < IndexCt; k++) {
+					if (Indices[k] == j) {
+						Indices[k] = i;
+					}
+				}
+			}
+		}
+	}
+	return GEOPROC_SUCCESS;
+}
 
+void GeometryProcessor::Populate(TriMesh& TMesh, uint16* Indices, uint32 IndexCt, uint32 VertexCt) {
 	// Vertices[Indices[0]] = Tri0.A, Vertices[Indices[1]] = Tri0.B, Vertices[Indices[2]] = Tri0.C,
 	// Vertices[Indices[3]] = Tri1.A ... and so on
+	
 	const uint32 VEnd = IndexCt - 3;
 	FVector* Vertices = TMesh.Vertices;
 	TArray<TempTri> Tris;
@@ -602,8 +617,6 @@ GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(
 	}
 	TMesh.VertexCt = VertexCt;
 	TMesh.Grid.Init(TMesh, Tris);
-	
-	return GEOPROC_SUCCESS;
 }
 
 void GeometryProcessor::FlagTrisWithBV(TArray<TriMesh*>& TMeshes) {

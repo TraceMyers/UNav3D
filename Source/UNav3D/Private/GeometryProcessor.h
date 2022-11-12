@@ -23,7 +23,7 @@ public:
 		GEOPROC_SUCCESS,
 		GEOPROC_HIGH_INDEX=-1,
 		GEOPROC_ALLOC_FAIL=-2,
-		GEOPROC_BATCH_SZ_0=-3,
+		GEOPROC_BATCH_SZ_LEQ_0=-3,
 		GEOPROC_BAD_BATCH_SZ=-4,
 		GEOPROC_BAD_START_TRI=-5,
 		GEOPROC_MAXED_GROUPS=-6
@@ -67,6 +67,10 @@ private:
 	// Copies the vertex buffer of the mesh into TMesh.Vertices
 	GEOPROC_RESPONSE GetVertices(const FStaticMeshLODResources& LOD, TriMesh& TMesh, uint32& VertexCt) const;
 
+	static int GetNeighbors(
+		const TriGrid& Grid, int BatchSz, Tri& T, int& TriCt, bool& OnlyAssignNeighbors, bool& BatchFinished
+	);
+
 	static inline Tri* GetUnbatchedTri(const TriGrid& Grid);
 	
 	static inline Tri* GetUngroupedTri(const TriGrid& Grid);
@@ -85,13 +89,12 @@ private:
 
 	static inline void SmoothPolygon(VBufferPolygon& Polygon, float Sigma=0.2f, int PassCt=3);
 
-	// Populates TMesh with Tris given the previously filled vertex and index buffers
-	static GEOPROC_RESPONSE Populate(
-		TriMesh& TMesh,
-		uint16* Indices,
-		uint32 IndexCt,
-		uint32 VertexCt
+	static GEOPROC_RESPONSE FixDuplicateVertices(
+		FVector* Vertices, uint16* Indices, uint32 IndexCt, uint32 VertexCt
 	);
+
+	// Populates TMesh with Tris given the previously filled vertex and index buffers
+	static void Populate(TriMesh& TMesh, uint16* Indices, uint32 IndexCt, uint32 VertexCt);
 
 	// flag tris with flags that relate to their location relative to the bounds volume
 	static void FlagTrisWithBV(TArray<TriMesh*>& TMeshes);
@@ -159,4 +162,5 @@ private:
 	// meshes
 	
 };
+
 

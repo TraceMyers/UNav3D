@@ -870,60 +870,61 @@ namespace Geometry {
 
 		// Asks if Tris with indices A and indices B are neighbors (do they share a side?)
 		bool Internal_AreNeighbors(const uint32* IndicesA, const uint32* IndicesB, uint32& Flags, int SideIndex) {
-			constexpr int j[2][2] {{1, 2}, {0, 2}};
-			for (int i = 0; i < 2; i++) {
+			enum {A=0, B=1, C=2};
+			constexpr int j[2][2] {{B, C}, {A, C}};
+			for (int i = A; i < C; i++) {
 				const int j0 = j[i][0];
 				const int j1 = j[i][1];
-				if (IndicesA[i] == IndicesB[0]) {
-					if (IndicesA[j0] == IndicesB[1]) {
+				if (IndicesA[i] == IndicesB[A]) {
+					if (IndicesA[j0] == IndicesB[B]) {
 						Tri::AddNeighborFlag(Flags, i, j0, SideIndex);
 						return true;
 					}
-					if (IndicesA[j0] == IndicesB[2]) {
+					if (IndicesA[j0] == IndicesB[C]) {
 						Tri::AddNeighborFlag(Flags, i, j0, SideIndex);
 						return true;
 					}
-					if (IndicesA[j1] == IndicesB[1]) {
+					if (IndicesA[j1] == IndicesB[B]) {
 						Tri::AddNeighborFlag(Flags, i, j1, SideIndex);
 						return true;
 					}
-					if (IndicesA[j1] == IndicesB[2]) {
-						Tri::AddNeighborFlag(Flags, i, j1, SideIndex);
-						return true;
-					}
-				}
-				else if (IndicesA[i] == IndicesB[1]) {
-					if (IndicesA[j0] == IndicesB[0]) {
-						Tri::AddNeighborFlag(Flags, i, j0, SideIndex);
-						return true;
-					}
-					if (IndicesA[j0] == IndicesB[2]) {
-						Tri::AddNeighborFlag(Flags, i, j0, SideIndex);
-						return true;
-					}
-					if (IndicesA[j1] == IndicesB[0]) {
-						Tri::AddNeighborFlag(Flags, i, j1, SideIndex);
-						return true;
-					}
-					if (IndicesA[j1] == IndicesB[2]) {
+					if (IndicesA[j1] == IndicesB[C]) {
 						Tri::AddNeighborFlag(Flags, i, j1, SideIndex);
 						return true;
 					}
 				}
-				else if (IndicesA[i] == IndicesB[2]) {
-					if (IndicesA[j0] == IndicesB[1]) {
+				else if (IndicesA[i] == IndicesB[B]) {
+					if (IndicesA[j0] == IndicesB[A]) {
 						Tri::AddNeighborFlag(Flags, i, j0, SideIndex);
 						return true;
 					}
-					if (IndicesA[j0] == IndicesB[0]) {
+					if (IndicesA[j0] == IndicesB[C]) {
 						Tri::AddNeighborFlag(Flags, i, j0, SideIndex);
 						return true;
 					}
-					if (IndicesA[j1] == IndicesB[1]) {
+					if (IndicesA[j1] == IndicesB[A]) {
 						Tri::AddNeighborFlag(Flags, i, j1, SideIndex);
 						return true;
 					}
-					if (IndicesA[j1] == IndicesB[0]) {
+					if (IndicesA[j1] == IndicesB[C]) {
+						Tri::AddNeighborFlag(Flags, i, j1, SideIndex);
+						return true;
+					}
+				}
+				else if (IndicesA[i] == IndicesB[C]) {
+					if (IndicesA[j0] == IndicesB[B]) {
+						Tri::AddNeighborFlag(Flags, i, j0, SideIndex);
+						return true;
+					}
+					if (IndicesA[j0] == IndicesB[A]) {
+						Tri::AddNeighborFlag(Flags, i, j0, SideIndex);
+						return true;
+					}
+					if (IndicesA[j1] == IndicesB[B]) {
+						Tri::AddNeighborFlag(Flags, i, j1, SideIndex);
+						return true;
+					}
+					if (IndicesA[j1] == IndicesB[A]) {
 						Tri::AddNeighborFlag(Flags, i, j1, SideIndex);
 						return true;
 					}
@@ -1266,7 +1267,7 @@ namespace Geometry {
 			if (Internal_AreNeighbors(TriVIndices, VIndices, Flags, NeighborCt)) {
 				Neighbors[NeighborCt] = &Grid[i];
 				if (++NeighborCt == 3) {
-					return NeighborCt;
+					return 3;
 				}
 			}
 		}
@@ -1276,10 +1277,11 @@ namespace Geometry {
 			if (Internal_AreNeighbors(TriVIndices, VIndices, Flags, NeighborCt)) {
 				Neighbors[NeighborCt] = &Grid[i];
 				if (++NeighborCt == 3) {
-					return NeighborCt;
+					return 3;
 				}
 			}
 		}
+	
 		return NeighborCt;
 	}
 	

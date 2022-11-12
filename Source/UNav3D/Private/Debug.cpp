@@ -240,13 +240,34 @@ bool UNavDbg::DoesTriMatchVertexCaptures(const Tri& T) {
 
 void UNavDbg::BreakOnVertexCaptureMatch(const Tri& T) {
 	if (DoesTriMatchVertexCaptures(T)) {
-		printf("breaking on vertex capture match\n");
+		check(false);
 	}
 }
 
 void UNavDbg::BreakOnVertexCaptureMatch(const Tri& A, const Tri& B) {
 	if (DoesTriMatchVertexCaptures(A) && DoesTriMatchVertexCaptures(B)) {
-		printf("breaking on vertex capture match\n");
+		check(false);
+	}
+}
+
+void UNavDbg::BreakOnBadNeighborFlags(const Tri& T) {
+	constexpr uint32 Chk0 = 0b00000000000000000001110000000000;
+	constexpr uint32 Ind0 = 0b00000000000000000000010000000000;
+	constexpr uint32 Chk1 = 0b00000000000000001110000000000000;
+	constexpr uint32 Ind1 = 0b00000000000000000010000000000000;
+	constexpr uint32 Chk2 = 0b00000000000001110000000000000000;
+	constexpr uint32 Ind2 = 0b00000000000000010000000000000000;
+	const uint32 T0 = T.Flags & Chk0;
+	const uint32 T1 = T.Flags & Chk1;
+	const uint32 T2 = T.Flags & Chk2;
+	if (T0 != Ind0 && T0 != Ind0 << 1 && T0 != Ind0 << 2 && (T.Flags & ~0x1) > 0) {
+		check(false);
+	}	
+	if (T1 != Ind1 && T1 != Ind1 << 1 && T1 != Ind1 << 2 && (T.Flags & ~0x1) > 0) {
+		check(false);
+	}	
+	if (T2 != Ind2 && T2 != Ind2 << 1 && T2 != Ind2 << 2 && (T.Flags & ~0x1) > 0) {
+		check(false);
 	}
 }
 
@@ -298,6 +319,21 @@ void UNavDbg::DrawMeshBatchGroups(const UWorld* World, TArray<TArray<TArray<Tri*
 			}
 		}
 	}
+}
+
+void UNavDbg::PrintMeshBatches(TArray<TArray<TArray<Tri*>>>& Batches) {
+	printf("---\nBatches:\n---\n");
+	int Total = 0;
+	for (int i = 0; i < Batches.Num(); i++) {
+		int Sum = 0;
+		auto& Batch = Batches[i];
+		for (auto& Group : Batch) {
+			Sum += Group.Num();
+		}
+		Total += Sum;
+		printf("%03d: %d\n", i, Sum);
+	}
+	printf("Total: %d\n", Total);
 }
 
 void UNavDbg::DrawVBufferPolygons(const UWorld* World, TArray<VBufferPolygon>& Polygons) {

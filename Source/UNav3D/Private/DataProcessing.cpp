@@ -114,7 +114,7 @@ namespace {
 
 	// TODO: Make an error log for more informative errors
 	bool BatchTris(const TriMesh& TMesh, TArray<TArray<TArray<Tri*>>>& MeshBatches) {
-		constexpr static uint16 BATCH_SZ = 24;
+		constexpr static uint16 BATCH_SZ = 128;
 		uint16 MeshBatch = 1;
 		if (TMesh.Grid.Num() / BATCH_SZ >= Tri::MAX_BATCH_CT) {
 			UNAV_GENERR("Batch size too small for one or more of the meshes. Exiting process.")
@@ -178,16 +178,18 @@ namespace {
 	#ifdef UNAV_DBG
 			UNavDbg::PrintTriMesh(TMesh);
 	#endif
-
+			
 			TArray<TArray<TArray<Tri*>>> Batches;
 			if (!BatchTris(TMesh, Batches)) {
 				return false;
 			}
+			UNavDbg::PrintMeshBatches(Batches);
 			uint16 BatchNo = 1;
-			for (auto& Batch : Batches) {
-				GProc.SimplifyMeshBatch(Batch, TMesh, BatchNo);
-				BatchNo++;
-			}
+			
+			// for (auto& Batch : Batches) {
+			// 	GProc.SimplifyMeshBatch(Batch, TMesh, BatchNo);
+			// 	BatchNo++;
+			// }
 			// TODO: thread simplify
 			// UNavDbg::DrawMeshBatchGroups(World, Batches);
 			// simplifymeshbatch

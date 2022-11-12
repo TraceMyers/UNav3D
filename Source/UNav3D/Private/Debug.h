@@ -73,6 +73,8 @@ namespace UNavDbg {
 	
 	// to use this make sure the build configuration is on debug and set a breakpoint inside the function
 	void BreakOnVertexCaptureMatch(const Tri& A, const Tri& B);
+	
+	void BreakOnBadNeighborFlags(const Tri& T);
 
 	void SaveLine(const FVector& A, const FVector& B);
 
@@ -83,6 +85,8 @@ namespace UNavDbg {
 	void DrawMeshBatches(const UWorld* World, TArray<TArray<TArray<Tri*>>>& Batches);
 	
 	void DrawMeshBatchGroups(const UWorld* World, TArray<TArray<TArray<Tri*>>>& Batches);
+
+	void PrintMeshBatches(TArray<TArray<TArray<Tri*>>>& Batches);
 
 	void DrawVBufferPolygons(const UWorld* World, TArray<VBufferPolygon>& Polygons);
 }
