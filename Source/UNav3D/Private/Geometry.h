@@ -77,5 +77,11 @@ namespace Geometry {
 		const FVector& Normal, const FVector& W, const FVector& V, const FVector& U, VERTEX_T PrevType
 	);
 
-	inline int GetNeighborTris(const TriGrid& Grid, int TIndex, const uint32* TriVIndices, Tri** Neighbors);
+	inline int GetNeighborTris(
+		const TriGrid& Grid,
+		int TIndex,
+		const uint32* TriVIndices,
+		Tri** Neighbors,
+		uint32& Flags
+	);
 }

@@ -189,18 +189,18 @@ void UNavDbg::DrawNavMeshNormals(const UWorld* World, const UNavMesh& NMesh) {
 void UNavDbg::DrawTris(const UWorld* World, const TArray<Tri>& Tris, FColor Color) {
 	for (int i = 0; i < Tris.Num(); i++) {
 		const auto& Tri = Tris[i];
-		DrawDebugLine(World, Tri.A, Tri.B, Color, false, DBG_DRAW_TIME, 0, 1.0f);
-		DrawDebugLine(World, Tri.B, Tri.C, Color, false, DBG_DRAW_TIME, 0, 1.0f); 
-		DrawDebugLine(World, Tri.C, Tri.A, Color, false, DBG_DRAW_TIME, 0, 1.0f);
+		DrawDebugLine(World, Tri.A, Tri.B, Color, false, DBG_DRAW_TIME, 0, 2.0f);
+		DrawDebugLine(World, Tri.B, Tri.C, Color, false, DBG_DRAW_TIME, 0, 2.0f); 
+		DrawDebugLine(World, Tri.C, Tri.A, Color, false, DBG_DRAW_TIME, 0, 2.0f);
 	}	
 }
 
 void UNavDbg::DrawTris(const UWorld* World, const TArray<Tri*>& Tris, FColor Color) {
 	for (int i = 0; i < Tris.Num(); i++) {
 		const auto& Tri = Tris[i];
-		DrawDebugLine(World, Tri->A, Tri->B, Color, false, DBG_DRAW_TIME, 0, 1.0f);
-		DrawDebugLine(World, Tri->B, Tri->C, Color, false, DBG_DRAW_TIME, 0, 1.0f); 
-		DrawDebugLine(World, Tri->C, Tri->A, Color, false, DBG_DRAW_TIME, 0, 1.0f);
+		DrawDebugLine(World, Tri->A, Tri->B, Color, false, DBG_DRAW_TIME, 0, 2.0f);
+		DrawDebugLine(World, Tri->B, Tri->C, Color, false, DBG_DRAW_TIME, 0, 2.0f); 
+		DrawDebugLine(World, Tri->C, Tri->A, Color, false, DBG_DRAW_TIME, 0,2.0f);
 	}	
 }
 
@@ -264,4 +264,49 @@ void UNavDbg::DrawSavedLines(const UWorld* World) {
 void UNavDbg::PrintThreadSuccess(FCriticalSection* Mutex) {
 	FScopeLock Lock(Mutex);
 	printf("Thread success\n");
+}
+
+void UNavDbg::DrawMeshBatches(const UWorld* World, TArray<TArray<TArray<Tri*>>>& Batches) {
+	const FColor Colors[8] {
+		FColor::Blue, FColor::Cyan, FColor::Green, FColor::Magenta,
+		FColor::Orange, FColor::Purple, FColor::Red, FColor::Yellow
+	};
+	int ColorIndex = 0;
+	for (auto& Batch : Batches) {
+		const FColor& Color = Colors[ColorIndex];
+		for (auto& Group : Batch) {
+			DrawTris(World, Group, Color);
+		}
+		if (++ColorIndex >= 8) {
+			ColorIndex = 0;
+		}
+	}
+}
+
+void UNavDbg::DrawMeshBatchGroups(const UWorld* World, TArray<TArray<TArray<Tri*>>>& Batches) {
+	const FColor Colors[8] {
+		FColor::Blue, FColor::Cyan, FColor::Green, FColor::Magenta,
+		FColor::Orange, FColor::Purple, FColor::Red, FColor::Yellow
+	};
+	int ColorIndex = 0;
+	for (auto& Batch : Batches) {
+		for (auto& Group : Batch) {
+			const FColor& Color = Colors[ColorIndex];
+			DrawTris(World, Group, Color);
+			if (++ColorIndex >= 8) {
+				ColorIndex = 0;
+			}
+		}
+	}
+}
+
+void UNavDbg::DrawVBufferPolygons(const UWorld* World, TArray<VBufferPolygon>& Polygons) {
+	for (auto& P : Polygons) {
+		const auto StartVertex = &P.Vertices[0];
+		auto WalkVertex = StartVertex;
+		do {
+			DrawDebugLine(World, *WalkVertex->Location, *WalkVertex->Next->Location, FColor::Red, false, DBG_DRAW_TIME);
+			WalkVertex = WalkVertex->Next;
+		} while (WalkVertex != StartVertex);
+	}	
 }

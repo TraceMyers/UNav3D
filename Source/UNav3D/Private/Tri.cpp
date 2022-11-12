@@ -1,29 +1,47 @@
 ﻿#include "Tri.h"
-#include <utility>
-
-// flag if tri edge trace points inside box
 
 namespace {
+
+	constexpr int NEIGHBOR_0_SHIFT = 10;
+	constexpr int NEIGHBOR_1_SHIFT = 13;
+	constexpr int NEIGHBOR_2_SHIFT = 16;
+	constexpr float ONE_THIRD = 1.0f / 3.0f;
+	FVector ZeroVec (0.0f, 0.0f, 0.0f);
 	
 	enum TRI_FLAGS {
+		// whether the vertices are inside other meshes
 		TRI_A_OBSCURED =	0x00000001,
 		TRI_B_OBSCURED =	0x00000002,
 		TRI_C_OBSCURED =	0x00000004,
-		TRI_CHANGED =		0x000000f0,
-		TRI_CULL =			0x00000010,
-		TRI_PROBLEM_CASE =	0x00000020,
-		TRI_TO_POLYGON =	0x00000040,
-		TRI_ON_BOX_EDGE =	0x00000100,
-		TRI_A_INSIDE_BV =	0x00001000,
-		TRI_B_INSIDE_BV =	0x00002000,
-		TRI_C_INSIDE_BV =	0x00004000,
+		TRI_OBSCURED =		TRI_A_OBSCURED | TRI_B_OBSCURED | TRI_C_OBSCURED,
+		// for the intersections-to-polygons process
+		TRI_CULL =			0x00000008,
+		TRI_PROBLEM_CASE =	0x00000010,
+		TRI_TO_POLYGON =	0x00000020,
+		TRI_CHANGED =		TRI_CULL | TRI_PROBLEM_CASE | TRI_TO_POLYGON,
+		// whether vertices are inside the bounds volume
+		TRI_A_INSIDE_BV =	0x00000040,
+		TRI_B_INSIDE_BV =	0x00000080,
+		TRI_C_INSIDE_BV =	0x00000100,
 		TRI_INSIDE_BV =		TRI_A_INSIDE_BV | TRI_B_INSIDE_BV | TRI_C_INSIDE_BV,
-		TRI_IN_BATCH =		0x00ff0000,
-		TRI_SEARCHED =		0x01000000	
+		// cleared before flags above used
+		TRI_SEARCHED =		0x00000001,
+		// neighbors, which side? only valid directly after the batching phase; otherwise, neighbors are always AB,BC,CA
+		TRI_AB =			0x00000001,
+		TRI_BC =			0x00000002,
+		TRI_CA =			0x00000004,
+		TRI_NEIGHBOR_0 =	(TRI_AB | TRI_BC | TRI_CA) << NEIGHBOR_0_SHIFT,
+		TRI_NEIGHBOR_1 =	(TRI_AB | TRI_BC | TRI_CA) << NEIGHBOR_1_SHIFT,
+		TRI_NEIGHBOR_2 =	(TRI_AB | TRI_BC | TRI_CA) << NEIGHBOR_2_SHIFT,
+		// The last two share the same space and are useful at different stages of processing
+		// group number in last 1.5 bytes; allows for 4095 groups per batch
+		TRI_IN_GROUP =		0xfff00000,
+		// batch number; allows for 4095 batches per mesh; placement changes during processing
+		TRI_BATCH_BFRGRP =	0x000fff00,
+		TRI_BATCH_AFTGRP =	0xfff00000,
 	};
-
-	constexpr float ONE_THIRD = 1.0f / 3.0f;
-	FVector ZeroVec (0.0f, 0.0f, 0.0f);
+	uint32 TRI_BATCH = TRI_BATCH_BFRGRP;
+	int TRI_BATCH_SHIFT = 8;
 }
 
 FVector TempTri::GetCenter() const {
@@ -76,6 +94,116 @@ float Tri::GetArea(const Tri& T) {
 
 FVector Tri::GetCenter() const {
 	return (A + B + C) * ONE_THIRD;
+}
+
+void Tri::AddNeighborFlag(uint32& ExtFlags, int V0, int V1, int SideNo) {
+	uint32 SideFlag;
+	switch(V0) {
+	case 0:
+		switch(V1) {
+		case 1:
+			SideFlag = TRI_AB;
+			break;
+		case 2:
+			SideFlag = TRI_CA;
+			break;
+		default:
+			check(V1 < 1 || V1 > 2)
+			return;
+		}
+		break;
+	case 1:
+		switch(V1) {
+		case 0:
+			SideFlag = TRI_AB;
+			break;
+		case 2:
+			SideFlag = TRI_BC;
+			break;
+		default:
+			check(V1 != 0 && V1 != 2)
+			return;
+		}
+		break;
+	case 2:
+		switch(V1) {
+		case 0:
+			SideFlag = TRI_CA;
+			break;
+		case 1:
+			SideFlag = TRI_BC;
+			break;
+		default:
+			check(V1 < 0 || V1 > 1)
+			return;
+		}
+		break;
+	default:
+		check(V0 < 0 || V0 > 2)
+		return;
+	}	
+	ExtFlags |= SideFlag << (10 + 3 * SideNo);
+}
+
+void Tri::AddFlags(uint32 _Flags) {
+	Flags |= _Flags;
+}
+
+void Tri::OrganizeNeighbors() {
+	while (Neighbors.Num() < 3) {
+		Neighbors.Add(nullptr);	
+	}
+	Tri* ABTri = nullptr;
+	Tri* BCTri = nullptr;
+	Tri* CATri = nullptr;
+	const uint32 Neighbor0 = Flags & TRI_NEIGHBOR_0;
+	const uint32 Neighbor1 = Flags & TRI_NEIGHBOR_1;
+	const uint32 Neighbor2 = Flags & TRI_NEIGHBOR_2;
+	if (Neighbor0) {
+		if (Neighbor0 == TRI_AB << NEIGHBOR_0_SHIFT) {
+			ABTri = Neighbors[0];
+		}
+		else if (Neighbor0 == TRI_BC << NEIGHBOR_0_SHIFT) {
+			BCTri = Neighbors[0];
+		}
+		else {
+			CATri = Neighbors[0];
+		}
+		if (Neighbor1) {
+			if (Neighbor1 == TRI_AB << NEIGHBOR_1_SHIFT) {
+				ABTri = Neighbors[1];
+			}
+			else if (Neighbor1 == TRI_BC << NEIGHBOR_1_SHIFT) {
+				BCTri = Neighbors[1];
+			}
+			else {
+				CATri = Neighbors[1];
+			}
+			if (Neighbor2) {
+				if (Neighbor2 == TRI_AB << NEIGHBOR_2_SHIFT) {
+					ABTri = Neighbors[2];
+				}
+				else if (Neighbor2 == TRI_BC << NEIGHBOR_2_SHIFT) {
+					BCTri = Neighbors[2];
+				}
+				else {
+					CATri = Neighbors[2];
+				}
+			}
+		}
+	}
+	Neighbors[0] = ABTri;
+	Neighbors[1] = BCTri;
+	Neighbors[2] = CATri;
+}
+
+void Tri::ClearFlags() {
+	Flags = 0x0;
+}
+
+void Tri::ShiftBatchFlags() {
+	TRI_BATCH_SHIFT += 12;
+	TRI_BATCH = TRI_BATCH_AFTGRP;
 }
 
 bool Tri::IsAObscured() const {
@@ -151,19 +279,11 @@ void Tri::SetInsideBV() {
 }
 
 bool Tri::AnyObscured() const {
-	return IsAObscured() || IsBObscured() || IsCObscured();
+	return Flags & TRI_OBSCURED;
 }
 
 bool Tri::AllObscured() const {
-	return IsAObscured() && IsBObscured() && IsCObscured();
-}
-
-void Tri::SetOnBoxEdge() {
-	Flags |= TRI_ON_BOX_EDGE;	
-}
-
-bool Tri::IsOnBoxEdge() const {
-	return Flags & TRI_ON_BOX_EDGE;	
+	return (Flags & TRI_OBSCURED) == TRI_OBSCURED;
 }
 
 bool Tri::IsChanged() const {
@@ -182,17 +302,32 @@ void Tri::MarkForPolygon() {
 	Flags |= TRI_TO_POLYGON;	
 }
 
-void Tri::SetBatch(int BatchNo) {
-	Flags |= BatchNo << 16;
+void Tri::SetBatch(uint16 BatchNo) {
+	Flags &= ~TRI_BATCH;
+	Flags |= BatchNo << TRI_BATCH_SHIFT;
 }
 
-int Tri::GetBatch() const {
-	return (Flags & TRI_IN_BATCH) >> 16;	
+uint16 Tri::GetBatch() const {
+	return (Flags & TRI_BATCH) >> TRI_BATCH_SHIFT;	
 }
 
 bool Tri::IsInBatch() const {
-	return Flags & TRI_IN_BATCH;
+	return Flags & TRI_BATCH;
 }
+
+void Tri::SetGroup(uint16 GroupNo) {
+	Flags &= ~TRI_IN_GROUP;
+	Flags |= GroupNo << 20;
+}
+
+uint16 Tri::GetGroup() const {
+	return (Flags & TRI_IN_GROUP) >> 20;	
+}
+
+bool Tri::IsInGroup() const {
+	return Flags & TRI_IN_GROUP;	
+}
+
 
 void Tri::SetSearched() {
 	Flags |= TRI_SEARCHED;	

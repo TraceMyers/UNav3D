@@ -34,6 +34,23 @@ struct Tri {
 
 	FVector GetCenter() const;
 
+	// because side-to-side connection between tris is disconnected from neighbor adding, it's helpful to have
+	// a builder that populates connection flags before assigning to the tri. V0,V1 are in 0,1,2, translating to A,B,C
+	// and SideNo is in 0,1,2 for order of adding
+	static inline void AddNeighborFlag(uint32& Flags, int V0, int V1, int SideNo);
+
+	// As of 11/11/2022, only used for adding built neighbor flags
+	inline void AddFlags(uint32 Flags);
+
+	// neighbors may not be added in order AB, BC, CA; this organizes them so they are, and so every tri always
+	// has 3 neighbors, where nonexistent neighbor <- nullptr; neighbors should only be nonexistent when a mesh
+	// is not continuous along the surface, which may be true during some stages of reformation
+	inline void OrganizeNeighbors();
+
+	inline void ClearFlags();
+
+	static inline void ShiftBatchFlags();
+
 	// asking if this vertex is inside any other meshes; need to be set by Geometry::FlagObscuredTris() first
 	inline bool IsAObscured() const;
 	
@@ -90,10 +107,6 @@ struct Tri {
 	// are all vertices obscured?
 	inline bool AllObscured() const;
 
-	inline void SetOnBoxEdge();
-
-	inline bool IsOnBoxEdge() const;
-
 	inline bool IsChanged() const;
 	
 	void MarkForCull();
@@ -102,11 +115,17 @@ struct Tri {
 
 	void MarkForPolygon();
 
-	void SetBatch(int BatchNo);
+	void SetBatch(uint16 BatchNo);
 
-	int GetBatch() const;
+	uint16 GetBatch() const;
 
 	bool IsInBatch() const;
+
+	void SetGroup(uint16 GroupNo);
+	
+	uint16 GetGroup() const;
+
+	bool IsInGroup() const;
 
 	void SetSearched();
 
@@ -118,6 +137,11 @@ struct Tri {
 
 	static FVector CalculateNormal(const FVector &A, const FVector& B, const FVector& C);
 
+	static constexpr int MAX_BATCH_CT = 4095; // per mesh
+	static constexpr int MAX_GROUP_CT = 4095; // per batch
+	
+	enum {AB=0, BC=1, CA=2};
+	
 	FVector& A;
 	FVector& B;
 	FVector& C;

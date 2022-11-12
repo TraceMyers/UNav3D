@@ -127,6 +127,8 @@ public:
 	
 	inline void GetVIndices(int i, uint32* Indices) const;
 
+	inline int GetVIndex(const FVector* V) const;
+
 	inline int GetIndex(const Tri* T) const;
 	
 private:

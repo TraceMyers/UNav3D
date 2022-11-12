@@ -7,6 +7,7 @@ class UWorld;
 struct BoundingBox;
 struct UNavMesh;
 class TriGrid;
+struct VBufferPolygon;
 
 #define UNAV_DBG
 #define UNAV_DEV
@@ -78,4 +79,10 @@ namespace UNavDbg {
 	void DrawSavedLines(const UWorld* World);
 
 	void PrintThreadSuccess(FCriticalSection* Mutex);
+
+	void DrawMeshBatches(const UWorld* World, TArray<TArray<TArray<Tri*>>>& Batches);
+	
+	void DrawMeshBatchGroups(const UWorld* World, TArray<TArray<TArray<Tri*>>>& Batches);
+
+	void DrawVBufferPolygons(const UWorld* World, TArray<VBufferPolygon>& Polygons);
 }

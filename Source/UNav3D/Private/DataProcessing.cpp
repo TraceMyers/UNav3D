@@ -16,12 +16,11 @@
 namespace {
 
 	constexpr int TOTAL_RESET_TASK_CT = 3;
-	
 	constexpr int MAX_THREAD_CT = 8;
 	constexpr int WAIT_SUCCESS = 0;
 	constexpr int WAIT_FAILURE = -1;
 	constexpr int MAX_START_THREAD_ATTEMPTS = 300;
-	
+
 	int MaxRunningThreadCt = 4;
 
 	FCriticalSection DataProcMutex;
@@ -102,11 +101,11 @@ namespace {
 		);
 		const int BoundsVolumeCt = FoundActors.Num();
 		if (BoundsVolumeCt == 0) {
-			UNAV_GENERR("No bounds volumes found.")
+			UNAV_GENERR("No UNav3D bounds volumes found. Exiting process.")
 			return false;
 		}
 		if (BoundsVolumeCt > 1) {
-			UNAV_GENERR("UNav3D Currently only supports one Navigation Volume.")
+			UNAV_GENERR("UNav3D Currently only supports one Navigation Volume. Exiting process.")
 			return false;
 		}
 		Data::BoundsVolume = Cast<AUNav3DBoundsVolume>(FoundActors[0]);
@@ -114,21 +113,36 @@ namespace {
 	}
 
 	// TODO: Make an error log for more informative errors
-	bool BatchTris(const TriMesh& TMesh, TArray<TArray<Tri*>>& Batches) {
-		constexpr static uint16 BATCH_SZ = 2048;
+	bool BatchTris(const TriMesh& TMesh, TArray<TArray<TArray<Tri*>>>& MeshBatches) {
+		constexpr static uint16 BATCH_SZ = 24;
 		uint16 MeshBatch = 1;
-		if ((float)TMesh.Grid.Num() / BATCH_SZ >= (float)UINT16_MAX) {
-			UNAV_GENERR("Batch size too small for one or more of the meshes.")
+		if (TMesh.Grid.Num() / BATCH_SZ >= Tri::MAX_BATCH_CT) {
+			UNAV_GENERR("Batch size too small for one or more of the meshes. Exiting process.")
 			return false;
 		}
 		int StartTriIndex = 0;
 		while (StartTriIndex >= 0) {
+			MeshBatches.Add(TArray<TArray<Tri*>>());
+			auto& Batch = MeshBatches.Last();
 			const int BatchCt = GProc.GetMeshBatch(
-				Batches, TMesh, StartTriIndex, 2048, MeshBatch++
+				Batch, TMesh, StartTriIndex, BATCH_SZ, MeshBatch++
 			);
-			if (BatchCt == 0) {
-				UNAV_GENERR("Got a batch count of zero, which might indicate a problem with a mesh.")
-				return false;
+			if (BatchCt <= 0) {
+				if (BatchCt == 0) {
+					UNAV_GENERR("Got a batch count of zero, which might indicate a problem with a mesh. Continuing process.")
+					StartTriIndex = -1;
+				}
+				else if (BatchCt == GeometryProcessor::GEOPROC_MAXED_GROUPS) {
+					UNAV_GENERR(
+						"The batch size was too large for one of the meshes. Try decreasing the batch size, reducing the "
+						"normal angle allowance, or removing any meshes with a large number of triangles. Exiting process."
+					)
+					return false;
+				}
+				else {
+					UNAV_GENERR("Unexpected problem making batches. Exiting process.")
+					return false;
+				}
 			}
 		}	
 		return true;
@@ -136,7 +150,7 @@ namespace {
 
 	// Takes meshes found inside bounds volume and populates TriMeshes with their data
 	// This must run in the game thread, since access to mesh data is only allowed there
-	bool PopulateTriMeshes(TArray<TriMesh>& TMeshes) {
+	bool PopulateTriMeshes(const UWorld* World, TArray<TriMesh>& TMeshes) {
 		Data::BoundsVolume->GetOverlappingMeshes(TMeshes);
 		if (TMeshes.Num() == 0) {
 			UNAV_GENERR("No static mesh actors found inside the bounds volume.")
@@ -165,11 +179,23 @@ namespace {
 			UNavDbg::PrintTriMesh(TMesh);
 	#endif
 
-			TArray<TArray<Tri*>> Batches;
+			TArray<TArray<TArray<Tri*>>> Batches;
 			if (!BatchTris(TMesh, Batches)) {
 				return false;
 			}
+			uint16 BatchNo = 1;
+			for (auto& Batch : Batches) {
+				GProc.SimplifyMeshBatch(Batch, TMesh, BatchNo);
+				BatchNo++;
+			}
 			// TODO: thread simplify
+			// UNavDbg::DrawMeshBatchGroups(World, Batches);
+			// simplifymeshbatch
+
+			// process once group no longer needed:
+			// clear flags
+			// static shift flags
+			// set batch
 		}
 		
 		return true;
@@ -280,7 +306,7 @@ void DataProcessing::TotalReload() {
 	Task.MakeDialog(false);
 	
 	EnterProgressFrame(Task, "getting and simplifying static mesh data");
-	if (!PopulateTriMeshes(Data::TMeshes)) {
+	if (!PopulateTriMeshes(World, Data::TMeshes)) {
 		return;
 	}
 

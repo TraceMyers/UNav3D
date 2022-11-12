@@ -185,6 +185,10 @@ void TriGrid::GetVIndices(int i, uint32* Indices) const {
 	Indices[2] = &T.C - Vertices;
 }
 
+int TriGrid::GetVIndex(const FVector* V) const {
+	return V - Vertices;
+}
+
 int TriGrid::GetIndex(const Tri* T) const {
 	return T - ((Tri*)Container);
 }

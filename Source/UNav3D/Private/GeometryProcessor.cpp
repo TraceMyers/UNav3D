@@ -167,7 +167,7 @@ int GeometryProcessor::GetMeshBatch(
 	TArray<TArray<Tri*>>& BatchTris,
 	const TriMesh& TMesh,
 	int& StartTriIndex,
-	uint16 BatchSz,
+	int BatchSz,
 	uint16 BatchNo
 ) {
 	constexpr float DEVIATION_CUTOFF = 0.9f;
@@ -179,7 +179,7 @@ int GeometryProcessor::GetMeshBatch(
 	
 	const TriGrid& Grid = TMesh.Grid;
 	const int GridCt = Grid.Num();
-	if (GridCt < StartTriIndex) {
+	if (StartTriIndex < 0 || StartTriIndex >= GridCt) {
 		return GEOPROC_BAD_START_TRI;
 	}
 	if (GridCt < BatchSz) {
@@ -193,29 +193,42 @@ int GeometryProcessor::GetMeshBatch(
 	BFSTrisA.Add(StartTriIndex);
 	TArray<uint32>* BFSTrisPtr = &BFSTrisA;
 	Tri* Neighbors[3] {nullptr};
-	uint16 TriCt = 0;
+	int TriCt = 0;
+	TArray<Tri*> TempSearched;
+	
+	// DEBUG: case at end - 6 neighbors, only one of the bits could have been a neighbor flag
 	
 	// populating batch & making sure we exit with m if logical failure or corrupt data
 	for (int m = 0; m < BatchSz; m++) {
+		// new group (within batch)
 		const uint32 PrevStartTriIndex = StartTriIndex;
 		Tri& StartTri = Grid[StartTriIndex];
 		const FVector& GrpTriNormal = StartTri.Normal;
 		const int GrpIndex = BatchTris.Add(TArray<Tri*>());
-		TArray<Tri*> TempSearched;
+		if (GrpIndex >= Tri::MAX_GROUP_CT) {
+			StartTriIndex = -1;
+			TriCt = GEOPROC_MAXED_GROUPS;
+			goto BATCH_END_PROCESSING;
+		}
 		
-		BatchTris[GrpIndex].Add(&StartTri);
-		StartTri.SetBatch(BatchNo);
 		StartTri.SetSearched();
 		if (++TriCt >= BatchSz) {
+			BatchTris[GrpIndex].Add(&StartTri);
+			// mirrors process in loop below of getting neighbors, but we're exiting because we met the batch size
 			uint32 BFSTriVIndices[3];
 			Grid.GetVIndices(StartTriIndex, BFSTriVIndices);
-			const int NeighborCt = Geometry::GetNeighborTris(Grid, StartTriIndex, BFSTriVIndices, Neighbors);
+			uint32 NeighborFlags;
+			const int NeighborCt = Geometry::GetNeighborTris(
+				Grid, StartTriIndex, BFSTriVIndices, Neighbors, NeighborFlags
+			);
+			StartTri.AddFlags(NeighborFlags);
 			for (int j = 0; j < NeighborCt; j++) {
 				Tri* Neighbor = Neighbors[j];
 				StartTri.Neighbors.Add(Neighbor);
 			}
+			
 			GetNewStartTriIndex(Grid, StartTriIndex);
-			return TriCt;
+			goto BATCH_END_PROCESSING;
 		}
 		
 		BFSTrisPtr->Add(StartTriIndex);
@@ -226,7 +239,7 @@ int GeometryProcessor::GetMeshBatch(
 			TArray<uint32>& BFSTris = *BFSTrisPtr;
 			TArray<uint32>& BFSTrisNext = (BFSTrisPtr == &BFSTrisA ? BFSTrisB : BFSTrisA);
 			// iterating over this group's outer members (BFS search edge)
-			for (int i = 0; i < BFSTris.Num(); i++) {
+			for (int i = 0; i < BFSTris.Num() && !BatchFinished; i++) {
 				// getting next tri whose neighbors we will be checking
 				const uint32 BFSTriIndex = BFSTris[i];
 				Tri& BFSTri = Grid[BFSTriIndex];
@@ -234,8 +247,17 @@ int GeometryProcessor::GetMeshBatch(
 				// getting the neighbors
 				uint32 BFSTriVIndices[3];
 				Grid.GetVIndices(BFSTriIndex, BFSTriVIndices);
-				const int NeighborCt = Geometry::GetNeighborTris(Grid, BFSTriIndex, BFSTriVIndices, Neighbors);
-
+				uint32 NeighborFlags = 0x0;
+				const int NeighborCt = Geometry::GetNeighborTris(
+					Grid, BFSTriIndex, BFSTriVIndices, Neighbors, NeighborFlags
+				);
+				BFSTri.AddFlags(NeighborFlags);
+				BatchTris[GrpIndex].Add(&BFSTri); // add tri to this group...
+				if (++TriCt >= BatchSz) {
+					OnlyAssignNeighbors = true;
+					BatchFinished = true;
+				}
+				
 				// iterating over neighbors...
 				for (int j = 0; j < NeighborCt; j++) {
 					Tri* Neighbor = Neighbors[j];
@@ -250,18 +272,12 @@ int GeometryProcessor::GetMeshBatch(
 						// and checking if this neighbor's normal is similar enough to start tri's to be added to the group
 						const float CosPhi = FVector::DotProduct(GrpTriNormal, Neighbor->Normal);
 						if (
-							!Neighbor->IsInBatch()
+							!Neighbor->IsInGroup()
 							&& CosPhi > DEVIATION_CUTOFF
 						) {
 							BFSTrisNext.Add(TIndex); // this neighbor will become an outer member (a search node)
-							BatchTris[GrpIndex].Add(Neighbor); // add tri to this group...
-							Neighbor->SetBatch(BatchNo); // and flag it for this batch
 							
-							if (++TriCt >= BatchSz) {
-								OnlyAssignNeighbors = true;
-								BatchFinished = true;
-							}
-							else if (BFSTrisNext.Num() >= BFS_SEARCH_MAX) {
+							if (BFSTrisNext.Num() >= BFS_SEARCH_MAX) {
 								OnlyAssignNeighbors = true;
 							}
 						}
@@ -278,7 +294,7 @@ int GeometryProcessor::GetMeshBatch(
 				if (StartTriIndex == PrevStartTriIndex) {
 					GetNewStartTriIndex(Grid, StartTriIndex);
 				}
-				return TriCt;
+				goto BATCH_END_PROCESSING;
 			}
 			// for tris that were not added to the group and are unbatched, unset them as searched
 			for (const auto T : TempSearched) {
@@ -299,17 +315,39 @@ int GeometryProcessor::GetMeshBatch(
 		}	
 	}
 
+	BATCH_END_PROCESSING:
+	for (const auto T : TempSearched) {
+		T->UnsetSearched();
+	}
+	for (int i = 0; i < BatchTris.Num(); i++) {
+		auto& Group = BatchTris[i];
+		const uint16 GrpIndex = i + 1;
+		for (const auto T : Group) {
+			T->OrganizeNeighbors();
+			T->ClearFlags();
+			T->SetBatch(BatchNo);
+			T->SetGroup(GrpIndex);	
+		}
+	}
+
 	// TODO: parameterize the values that determine the outcome here
 	// outside:
 	// create new polygon vertex buffer VBuf
 	// create all polygon array
 	// create edge polygon array (indices in all array)
-	// with threading:
-	// until tris exhausted:
-	//		create batch by connecting tris with similar vertices; batch tris are collected with BFS; all batches
-	//		after first should start with a tri that was a neighbor of a tri in the previous batch
-	//			while creating, form groups of similar normal'd tris; each group has a normal deviation budget
-	//			that accrues per add; it's possible there's no need for normal delta preference
+	// ...	
+	// per polygon i = 0 to end - 2 in edge polygons:
+	//		per polygon j = i + 1 to end - 1 in edge polygons:
+	//			use tri connections to form neighbor connections (will be useful in graph creation)
+	//			simplify edges between i and j by culling vertices that do not deviate beyond some delta from start search
+	//			Add shared edge vertices to pool, and share references
+	//			remove neighbor tris
+	//	triangulize polygons
+	//	re-make mesh with new tris
+	return TriCt;
+}
+
+void GeometryProcessor::SimplifyMeshBatch(TArray<TArray<Tri*>>& BatchTris, const TriMesh& TMesh, uint16 BatchNo) {
 	//		create polygon group array
 	//		per tri group:
 	//			form a polygon with the edge of group
@@ -324,15 +362,42 @@ int GeometryProcessor::GetMeshBatch(
 	//				remove neighbor tris
 	//		add polygons to all polygons
 	//		add indices to edge index array if edge
-	// per polygon i = 0 to end - 2 in edge polygons:
-	//		per polygon j = i + 1 to end - 1 in edge polygons:
-	//			use tri connections to form neighbor connections (will be useful in graph creation)
-	//			simplify edges between i and j by culling vertices that do not deviate beyond some delta from start search
-	//			Add shared edge vertices to pool, and share references
-	//			remove neighbor tris
-	//	triangulize polygons
-	//	re-make mesh with new tris
-	return TriCt;
+	
+	// create polygons from group edges
+	const int BatchTriCt = BatchTris.Num();
+	TArray<VBufferPolygon> Polygons;
+	for (int i = 0; i < BatchTriCt; i++) {
+		TArray<Tri*>& Group = BatchTris[i];
+		VBufferUnstructuredPolygon UPoly;
+		
+		const uint16 GroupNo = i + 1;
+		for (const auto T : Group) {
+			for (int j = Tri::AB; j <= Tri::CA; j++) { // 0 to 2, inclusive
+				Tri* Neighbor = T->Neighbors[j];
+				if (
+					Neighbor != nullptr
+					&& (Neighbor->GetGroup() != GroupNo || Neighbor->GetBatch() != BatchNo) 
+				) {
+					// find neighbors who are either not in this batch or in the same batch, but another group
+					AddVBufferUPolyEdge(UPoly, *T, j, Neighbor);
+				}
+			}
+		}
+
+		// creating a polygon from the outer edges of the group
+		const int UPolyEdgeCt = UPoly.Edges.Num();
+		if (UPolyEdgeCt >= 3) {
+			Polygons.Add(VBufferPolygon());
+			auto& Polygon = Polygons.Last();
+			if (!FormPolygon(Polygon, UPoly)) {
+				Polygons.RemoveAtSwap(Polygons.Num() - 1);
+			}
+			else {
+				SmoothPolygon(Polygon);
+			}
+		}
+	}
+	UNavDbg::DrawVBufferPolygons(GEditor->GetEditorWorldContext().World(), Polygons);
 }
 
 uint16* GeometryProcessor::GetIndices(const FStaticMeshLODResources& LOD, uint32& IndexCt) const {
@@ -403,15 +468,111 @@ Tri* GeometryProcessor::GetUnbatchedTri(const TriGrid& Grid) {
 	return nullptr;
 }
 
+Tri* GeometryProcessor::GetUngroupedTri(const TriGrid& Grid) {
+	for (int i = 0; i < Grid.Num(); i++) {
+		auto& T = Grid[i];
+		if (!T.IsInGroup()) {
+			return &T;
+		}
+	}
+	return nullptr;
+}
+
 bool GeometryProcessor::GetNewStartTriIndex(const TriGrid& Grid, int& StartTriIndex) {
-	const Tri* Unbatched = GetUnbatchedTri(Grid);
-	if (Unbatched != nullptr) {
-		StartTriIndex = Grid.GetIndex(Unbatched);
+	const Tri* Ungrouped = GetUngroupedTri(Grid);
+	if (Ungrouped != nullptr) {
+		StartTriIndex = Grid.GetIndex(Ungrouped);
 		return true;
 	}
 	// TMesh fully searched
 	StartTriIndex = -1;
 	return false;
+}
+
+void GeometryProcessor::AddVBufferUPolyEdge(VBufferUnstructuredPolygon& UPoly, const Tri& T, int Side, Tri* Neighbor) {
+	switch(Side) {
+	case Tri::AB:
+		UPoly.Edges.Add(VBufferPolyEdge(&T.A, &T.B, Neighbor));
+		break;
+	case Tri::BC:
+		UPoly.Edges.Add(VBufferPolyEdge(&T.B, &T.C, Neighbor));
+		break;
+	case Tri::CA:
+		UPoly.Edges.Add(VBufferPolyEdge(&T.C, &T.A, Neighbor));
+		break;
+	default:
+		check(Side < Tri::AB || Side > Tri::CA);
+	}	
+}
+
+bool GeometryProcessor::FormPolygon(VBufferPolygon& Polygon, VBufferUnstructuredPolygon& UPoly) {
+	const int UPolyEdgeCt = UPoly.Edges.Num();
+	const auto& StartEdge = UPoly.Edges[0];
+	Polygon.Vertices.Add(VBufferPolyNode(StartEdge.Neighbor, StartEdge.VertexA));
+	Polygon.Vertices.Add(VBufferPolyNode(nullptr, StartEdge.VertexB));
+	Polygon.Vertices[0].Next = &Polygon.Vertices[1];
+	Polygon.Vertices[1].Prev = &Polygon.Vertices[0];
+	VBufferPolyNode* Begin = &Polygon.Vertices[0];
+	VBufferPolyNode* End = &Polygon.Vertices[1];
+	
+	// just making sure outer loop isn't infinite
+	for (int m = 0 ; m < UPolyEdgeCt; m++) {
+		for (int j = 1; j < UPoly.Edges.Num(); j++) {
+			const VBufferPolyEdge& Edge = UPoly.Edges[j];
+			if (Edge.VertexA == Begin->Location) {
+				if (Edge.VertexB == End->Location) {
+					Begin->Prev = End;
+					End->Next = Begin;
+					return true;
+				}
+				Begin = AddPolyBegin(Polygon, *Begin, Edge.VertexB, Edge.Neighbor);
+			}
+			else if (Edge.VertexA == End->Location) {
+				if (Edge.VertexB == Begin->Location) {
+					Begin->Prev = End;
+					End->Next = Begin;
+					return true;
+				}
+				End = AddPolyEnd(Polygon, *End, Edge.VertexB, Edge.Neighbor);
+			}
+			else if (Edge.VertexB == Begin->Location) {
+				Begin = AddPolyBegin(Polygon, *Begin, Edge.VertexA, Edge.Neighbor);
+			}
+			else if (Edge.VertexB == End->Location) {
+				End = AddPolyEnd(Polygon, *End, Edge.VertexA, Edge.Neighbor);
+			}
+		}
+	}
+	return false;
+}
+
+VBufferPolyNode* GeometryProcessor::AddPolyBegin(VBufferPolygon& Polygon, VBufferPolyNode& B, FVector* V, Tri* Neighbor) {
+	Polygon.Vertices.Add(VBufferPolyNode(Neighbor, V));
+	const auto NewBegin = &Polygon.Vertices.Last();
+	B.Prev = NewBegin;
+	NewBegin->Next = &B;
+	return NewBegin;
+}
+
+VBufferPolyNode* GeometryProcessor::AddPolyEnd(VBufferPolygon& Polygon, VBufferPolyNode& E, FVector* V, Tri* Neighbor) {
+	Polygon.Vertices.Add(VBufferPolyNode(nullptr, V));
+	const auto NewEnd = &Polygon.Vertices.Last();
+	E.Next = NewEnd;
+	E.Neighbor = Neighbor;
+	NewEnd->Prev = &E;
+	return NewEnd;
+}
+
+void GeometryProcessor::SmoothPolygon(VBufferPolygon& Polygon, float Sigma, int PassCt) {
+	const auto& Cur = Polygon.Vertices[0];
+	const int NodeCt = Polygon.Vertices.Num();
+	for (int i = 0; i < NodeCt * PassCt; i++) {
+		const FVector& PrevLoc = *Cur.Prev->Location;
+		const FVector& NextLoc = *Cur.Next->Location;
+		FVector& CurLoc = *Cur.Location;
+		FVector Target = PrevLoc + (NextLoc - PrevLoc) * 0.5f;
+		CurLoc += (Target - CurLoc) * Sigma;
+	}	
 }
 
 GeometryProcessor::GEOPROC_RESPONSE GeometryProcessor::Populate(

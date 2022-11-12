@@ -1,6 +1,6 @@
 ﻿#pragma once
 
-
+struct VBufferUnstructuredPolygon;
 struct PolyEdge;
 struct PolyNode;
 class UStaticMesh;
@@ -10,6 +10,8 @@ struct UnstructuredPolygon;
 struct UPolyNode;
 struct Polygon;
 struct UNavMesh;
+struct VBufferPolygon;
+struct VBufferPolyNode;
 class TriGrid;
 
 // GeometryProcessor's job to work on geometrical objects, given information learned by using Geometry.h
@@ -23,7 +25,8 @@ public:
 		GEOPROC_ALLOC_FAIL=-2,
 		GEOPROC_BATCH_SZ_0=-3,
 		GEOPROC_BAD_BATCH_SZ=-4,
-		GEOPROC_BAD_START_TRI=-5
+		GEOPROC_BAD_START_TRI=-5,
+		GEOPROC_MAXED_GROUPS=-6
 	};
 
 	GeometryProcessor();
@@ -33,7 +36,13 @@ public:
 		TArray<TArray<Tri*>>& BatchTris,
 		const TriMesh& TMesh,
 		int& StartTriIndex,
-		uint16 BatchSz,
+		int BatchSz,
+		uint16 BatchNo
+	);
+
+	static void SimplifyMeshBatch(
+		TArray<TArray<Tri*>>& BatchTris,
+		const TriMesh& TMesh,
 		uint16 BatchNo
 	);
 	
@@ -59,8 +68,22 @@ private:
 	GEOPROC_RESPONSE GetVertices(const FStaticMeshLODResources& LOD, TriMesh& TMesh, uint32& VertexCt) const;
 
 	static inline Tri* GetUnbatchedTri(const TriGrid& Grid);
+	
+	static inline Tri* GetUngroupedTri(const TriGrid& Grid);
 
 	static bool GetNewStartTriIndex(const TriGrid& Grid, int& StartTriIndex);
+
+	static void AddVBufferUPolyEdge(VBufferUnstructuredPolygon& UPoly, const Tri& T, int Side, Tri* Neighbor=nullptr);
+
+	static inline bool FormPolygon(VBufferPolygon& Polygon, VBufferUnstructuredPolygon& UPoly);
+
+	// B is the current beginning of the forming polygon, returns node created at V as new beginning
+	static inline VBufferPolyNode* AddPolyBegin(VBufferPolygon& Polygon, VBufferPolyNode& B, FVector* V, Tri* Neighbor);
+	
+	// E is the current beginning of the forming polygon, returns node created at V as new end
+	static inline VBufferPolyNode* AddPolyEnd(VBufferPolygon& Polygon, VBufferPolyNode& E, FVector* V, Tri* Neighbor);
+
+	static inline void SmoothPolygon(VBufferPolygon& Polygon, float Sigma=0.2f, int PassCt=3);
 
 	// Populates TMesh with Tris given the previously filled vertex and index buffers
 	static GEOPROC_RESPONSE Populate(

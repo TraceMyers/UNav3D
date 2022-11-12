@@ -1,4 +1,5 @@
 ﻿#pragma once
+#include "Tri.h"
 
 struct PolyNode {
 	PolyNode(const FVector& _Location) :
@@ -11,11 +12,12 @@ struct PolyNode {
 };
 
 struct VBufferPolyNode {
-	VBufferPolyNode(int _VIndex) :
-		VIndex(_VIndex), PolygonIndex(-1), Prev(nullptr), Next(nullptr)
+	VBufferPolyNode(Tri* _Neighbor, FVector* Loc) :
+		Neighbor(_Neighbor), Location(Loc), Prev(nullptr), Next(nullptr)
 	{}
-	const int VIndex;
-	int PolygonIndex;
+	
+	Tri* Neighbor; // Tri neighbor at the edge made by this node and Next
+	FVector* Location;
 	VBufferPolyNode* Prev;
 	VBufferPolyNode* Next;
 };
@@ -33,6 +35,12 @@ struct Polygon {
 	int TriIndex;
 	enum POLYGON_MODE {SUBTRACT, ADD} Mode;
 	FVector& Normal;
+};
+
+// Vertices are not guaranteed to be in any particular order
+struct VBufferPolygon {
+	VBufferPolygon() {}
+	TArray<VBufferPolyNode> Vertices;
 };
 
 // used to denote intersections between triangles, for building polygons
@@ -74,7 +82,20 @@ struct PolyEdge {
 	TArray<FVector> ObscuredLocations; // locations from A (toward B) marking where this edge passes in and out of other meshes
 };
 
-
+struct VBufferPolyEdge {
+	
+	VBufferPolyEdge() :
+		VertexA(nullptr), VertexB(nullptr), Neighbor(nullptr)
+	{}
+	
+	VBufferPolyEdge(FVector* _VertexA, FVector* _VertexB, Tri* _Neighbor=nullptr) :
+		VertexA(_VertexA), VertexB(_VertexB), Neighbor(_Neighbor)
+	{}
+	
+	FVector* VertexA;
+	FVector* VertexB;
+	Tri* Neighbor;
+};
 
 struct UPolyNode {
 	UPolyNode(const FVector& _Location) :
@@ -88,4 +109,8 @@ struct UPolyNode {
 struct UnstructuredPolygon {
 	TArray<PolyEdge> Edges;
 	int TriIndex;
+};
+
+struct VBufferUnstructuredPolygon {
+	TArray<VBufferPolyEdge> Edges;
 };
