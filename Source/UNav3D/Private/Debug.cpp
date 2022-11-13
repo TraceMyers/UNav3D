@@ -340,9 +340,14 @@ void UNavDbg::DrawVBufferPolygons(const UWorld* World, TArray<VBufferPolygon>& P
 	for (auto& P : Polygons) {
 		const auto StartVertex = &P.Vertices[0];
 		auto WalkVertex = StartVertex;
+		int i = 0;
 		do {
-			DrawDebugLine(World, *WalkVertex->Location, *WalkVertex->Next->Location, FColor::Red, false, DBG_DRAW_TIME);
+			DrawDebugLine(World, *WalkVertex->Location, *WalkVertex->Next->Location, FColor::Red, false, DBG_DRAW_TIME, 0, 2.0f);
 			WalkVertex = WalkVertex->Next;
-		} while (WalkVertex != StartVertex);
+			i++;
+		} while (WalkVertex != StartVertex && i < 100);
+		if (i == 100) {
+			printf("crap\n");
+		}
 	}	
 }

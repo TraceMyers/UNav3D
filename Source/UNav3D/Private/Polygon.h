@@ -12,6 +12,10 @@ struct PolyNode {
 };
 
 struct VBufferPolyNode {
+	VBufferPolyNode() :
+		Neighbor(nullptr), Location(nullptr), Prev(nullptr), Next(nullptr)
+	{}
+	
 	VBufferPolyNode(Tri* _Neighbor, FVector* Loc) :
 		Neighbor(_Neighbor), Location(Loc), Prev(nullptr), Next(nullptr)
 	{}
@@ -38,9 +42,54 @@ struct Polygon {
 };
 
 // Vertices are not guaranteed to be in any particular order
+// TODO: use vertex buffer
 struct VBufferPolygon {
-	VBufferPolygon() {}
-	TArray<VBufferPolyNode> Vertices;
+
+	VBufferPolyNode* Vertices;
+	
+private:
+	
+	int _Num;
+	int Sz;
+
+public:
+	
+	VBufferPolygon() :
+		Vertices(nullptr), _Num(0), Sz(0)
+	{}
+	
+	void Empty() {
+		if (Vertices != nullptr) {
+			delete Vertices;
+		}
+		_Num = 0;
+		Sz = 0;
+	}
+	
+	bool Alloc(int Ct) {
+		if (Vertices != nullptr) {
+			Empty();				
+		}
+		Vertices = new VBufferPolyNode[Ct];
+		if (Vertices == nullptr) {
+			printf("GeometryProcessor::FormPolygon() alloc fail\n");
+			return false;
+		}
+		Sz = Ct;
+		return true;
+	}
+
+	VBufferPolyNode* Add(FVector* Location, Tri* Neighbor) {
+		if (_Num < Sz) {
+			return new (&Vertices[_Num++]) VBufferPolyNode(Neighbor, Location);
+		}
+		return nullptr;
+	}
+
+	int Num() const {
+		return _Num;
+	}
+	
 };
 
 // used to denote intersections between triangles, for building polygons

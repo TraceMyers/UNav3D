@@ -12,7 +12,6 @@
 #include "SelectionSet.h"
 #include "UNavMesh.h"
 #include "Containers/ArrayView.h"
-#include "string.h"
 
 // TODO: currently just using LOD0, and it would be nice to parameterize this, but I wouldn't do it until...
 // TODO: ... there is a good system in place to take that input from the user
@@ -229,7 +228,7 @@ int GeometryProcessor::GetMeshBatch(
 				Tri& BFSTri = Grid[BFSTriIndex];
 				BatchTris[GrpIndex].Add(&BFSTri); // add tri to this group
 				BFSTri.SetGroup(GrpNum);
-				++TriCt; 
+				++TriCt;
 				
 				const int NeighborCt = GetNeighbors(
 					Grid, BatchSz, BFSTri, TriCt, OnlyAssignNeighbors, BatchFinished
@@ -371,12 +370,12 @@ void GeometryProcessor::SimplifyMeshBatch(TArray<TArray<Tri*>>& BatchTris, const
 			if (!FormPolygon(Polygon, UPoly)) {
 				Polygons.RemoveAtSwap(Polygons.Num() - 1);
 			}
-			else {
-				SmoothPolygon(Polygon);
-			}
 		}
 	}
 	UNavDbg::DrawVBufferPolygons(GEditor->GetEditorWorldContext().World(), Polygons);
+	for (auto& P : Polygons) {
+		P.Empty();
+	}
 }
 
 uint16* GeometryProcessor::GetIndices(const FStaticMeshLODResources& LOD, uint32& IndexCt) const {
@@ -509,64 +508,92 @@ void GeometryProcessor::AddVBufferUPolyEdge(VBufferUnstructuredPolygon& UPoly, c
 bool GeometryProcessor::FormPolygon(VBufferPolygon& Polygon, VBufferUnstructuredPolygon& UPoly) {
 	const int UPolyEdgeCt = UPoly.Edges.Num();
 	const auto& StartEdge = UPoly.Edges[0];
-	Polygon.Vertices.Add(VBufferPolyNode(StartEdge.Neighbor, StartEdge.VertexA));
-	Polygon.Vertices.Add(VBufferPolyNode(nullptr, StartEdge.VertexB));
-	Polygon.Vertices[0].Next = &Polygon.Vertices[1];
-	Polygon.Vertices[1].Prev = &Polygon.Vertices[0];
-	VBufferPolyNode* Begin = &Polygon.Vertices[0];
-	VBufferPolyNode* End = &Polygon.Vertices[1];
+
+	if (!Polygon.Alloc(UPolyEdgeCt)) {
+		return false;
+	}
+	VBufferPolyNode* Begin = Polygon.Add(StartEdge.VertexA, StartEdge.Neighbor);
+	VBufferPolyNode* End = Polygon.Add(StartEdge.VertexB, nullptr);
+	Begin->Next = End;
+	End->Prev = Begin;
+
+	bool* EdgeAvailable = new bool[UPolyEdgeCt];
+	if (EdgeAvailable == nullptr) {
+		Polygon.Empty();
+		return false;
+	}
+	memset(EdgeAvailable, true, sizeof(bool) * UPolyEdgeCt);
+	EdgeAvailable[0] = false;
 	
 	// just making sure outer loop isn't infinite
 	for (int m = 0 ; m < UPolyEdgeCt; m++) {
 		for (int j = 1; j < UPoly.Edges.Num(); j++) {
 			const VBufferPolyEdge& Edge = UPoly.Edges[j];
-			if (Edge.VertexA == Begin->Location) {
-				if (Edge.VertexB == End->Location) {
+			if (Edge.VertexB == Begin->Location) {
+				if (Edge.VertexA == End->Location) {
 					Begin->Prev = End;
 					End->Next = Begin;
+					End->Neighbor = Edge.Neighbor;
 					return true;
 				}
-				Begin = AddPolyBegin(Polygon, *Begin, Edge.VertexB, Edge.Neighbor);
+				Begin = AddPolyBegin(Polygon, *Begin, Edge.VertexA, Edge.Neighbor);
+				if (Begin == nullptr) {
+					return false;
+				}
+				EdgeAvailable[j] = false;
 			}
 			else if (Edge.VertexA == End->Location) {
-				if (Edge.VertexB == Begin->Location) {
-					Begin->Prev = End;
-					End->Next = Begin;
-					return true;
-				}
 				End = AddPolyEnd(Polygon, *End, Edge.VertexB, Edge.Neighbor);
+				if (End == nullptr) {
+					return false;
+				}
+				EdgeAvailable[j] = false;
 			}
-			else if (Edge.VertexB == Begin->Location) {
-				Begin = AddPolyBegin(Polygon, *Begin, Edge.VertexA, Edge.Neighbor);
+			else if (Edge.VertexA == Begin->Location) {
+				Begin = AddPolyBegin(Polygon, *Begin, Edge.VertexB, Edge.Neighbor);
+				if (Begin == nullptr) {
+					return false;
+				}
+				EdgeAvailable[j] = false;
 			}
 			else if (Edge.VertexB == End->Location) {
 				End = AddPolyEnd(Polygon, *End, Edge.VertexA, Edge.Neighbor);
+				if (End == nullptr) {
+					return false;
+				}
+				EdgeAvailable[j] = false;
 			}
 		}
 	}
+	Polygon.Empty();
 	return false;
 }
 
 VBufferPolyNode* GeometryProcessor::AddPolyBegin(VBufferPolygon& Polygon, VBufferPolyNode& B, FVector* V, Tri* Neighbor) {
-	Polygon.Vertices.Add(VBufferPolyNode(Neighbor, V));
-	const auto NewBegin = &Polygon.Vertices.Last();
+	const auto NewBegin = Polygon.Add(V, Neighbor);
+	if (NewBegin == nullptr) {
+		return nullptr;
+	}
 	B.Prev = NewBegin;
 	NewBegin->Next = &B;
 	return NewBegin;
 }
 
 VBufferPolyNode* GeometryProcessor::AddPolyEnd(VBufferPolygon& Polygon, VBufferPolyNode& E, FVector* V, Tri* Neighbor) {
-	Polygon.Vertices.Add(VBufferPolyNode(nullptr, V));
-	const auto NewEnd = &Polygon.Vertices.Last();
+	const auto NewEnd = Polygon.Add(V, nullptr);
+	if (NewEnd == nullptr) {
+		return nullptr;
+	}
 	E.Next = NewEnd;
 	E.Neighbor = Neighbor;
 	NewEnd->Prev = &E;
 	return NewEnd;
 }
 
+// TODO: do not smooth edges shared with neighbors from outside batch
 void GeometryProcessor::SmoothPolygon(VBufferPolygon& Polygon, float Sigma, int PassCt) {
 	const auto& Cur = Polygon.Vertices[0];
-	const int NodeCt = Polygon.Vertices.Num();
+	const int NodeCt = Polygon.Num();
 	for (int i = 0; i < NodeCt * PassCt; i++) {
 		const FVector& PrevLoc = *Cur.Prev->Location;
 		const FVector& NextLoc = *Cur.Next->Location;

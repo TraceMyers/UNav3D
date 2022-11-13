@@ -35,8 +35,6 @@ namespace {
 	bool TryStartThread(FGeoProcThread::GEOPROC_THREAD_TASK Task, int ThreadIndex) {
 		constexpr int WAIT_MS = 10;
 
-		FThreadSafeBool* PP = IsGProcTAvail;
-		
 		for (int AttemptCt = 0; AttemptCt < MAX_START_THREAD_ATTEMPTS; AttemptCt++) {
 			if (GProcThreads[ThreadIndex]->StartThread(Task, &IsGProcTAvail[ThreadIndex], &DataProcMutex)) {
 				return true;	
@@ -175,23 +173,24 @@ namespace {
 			else if (Response == GeometryProcessor::GEOPROC_ALLOC_FAIL) {
 				UNAV_GENERR("The Geometry Processor failed to allocate enough space for a mesh.")
 			}
-	#ifdef UNAV_DBG
+
+#ifdef UNAV_DBG
 			UNavDbg::PrintTriMesh(TMesh);
-	#endif
+#endif
 			
 			TArray<TArray<TArray<Tri*>>> Batches;
 			if (!BatchTris(TMesh, Batches)) {
 				return false;
 			}
 			UNavDbg::PrintMeshBatches(Batches);
-			uint16 BatchNo = 1;
-			
-			// for (auto& Batch : Batches) {
-			// 	GProc.SimplifyMeshBatch(Batch, TMesh, BatchNo);
-			// 	BatchNo++;
-			// }
-			// TODO: thread simplify
 			// UNavDbg::DrawMeshBatchGroups(World, Batches);
+			
+			uint16 BatchNo = 1;
+			for (auto& Batch : Batches) {
+				GProc.SimplifyMeshBatch(Batch, TMesh, BatchNo);
+				BatchNo++;
+			}
+			// TODO: thread simplify
 			// simplifymeshbatch
 
 			// process once group no longer needed:
